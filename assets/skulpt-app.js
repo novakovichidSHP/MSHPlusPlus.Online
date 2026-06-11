@@ -3811,23 +3811,73 @@ async function runActiveFile() {
  */
 function printCompileDiagnostics(result) {
   const diagnostics = (result && result.diagnostics) || { items: [], counts: {} };
+  const items = (diagnostics.items || []).filter(
+    (item) => item.severity === "error" || item.severity === "warning"
+  );
   if (result && result.ok) {
     if (diagnostics.counts && diagnostics.counts.warning) {
       appendConsole(`${result.summary}\n`, false);
+      for (const item of items) {
+        appendDiagnosticLine(item);
+      }
     }
     return;
   }
   appendConsole("Ошибка компиляции:\n", true);
-  let shown = 0;
-  for (const item of diagnostics.items) {
-    if (item.severity === "error" || item.severity === "warning") {
-      appendConsole(`${item.file}:${item.line}:${item.col}: ${item.severity}: ${item.message}\n`, item.severity === "error");
-      shown += 1;
-    }
+  for (const item of items) {
+    appendDiagnosticLine(item);
   }
-  if (!shown && result && result.summary) {
+  if (!items.length && result && result.summary) {
     appendConsole(`${result.summary}\n`, true);
   }
+}
+
+/**
+ * Добавляет в консоль кликабельную строку диагностики:
+ * клик → переход к строке/колонке в редакторе (F4).
+ */
+function appendDiagnosticLine(item) {
+  const span = document.createElement("span");
+  span.className = item.severity === "error" ? "console-error" : "";
+  span.textContent = `${item.file}:${item.line}:${item.col}: ${item.severity}: ${item.message}`;
+  span.style.cursor = "pointer";
+  span.style.textDecoration = "underline dotted";
+  span.title = "Перейти к строке";
+  span.addEventListener("click", () => jumpToDiagnostic(item));
+  els.consoleOutput.appendChild(span);
+  els.consoleOutput.appendChild(document.createElement("br"));
+  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
+}
+
+/**
+ * Переводит редактор на позицию диагностики (file:line:col) и подсвечивает строку.
+ */
+function jumpToDiagnostic(item) {
+  if (!item || !Number.isFinite(item.line)) {
+    return;
+  }
+  if (item.file && item.file !== state.activeFile && getFileByName(item.file)) {
+    setActiveFile(item.file);
+  }
+  setEditorLineHighlight(item.line);
+  scrollEditorToLine(item.line);
+  const value = state.editorAdapter ? state.editorAdapter.getValue() : "";
+  const offset = lineColToOffset(value, item.line, item.col);
+  if (offset != null) {
+    callEditorAdapterMethod("setSelection", { start: offset, end: offset });
+  }
+  callEditorAdapterMethod("focus");
+}
+
+/** Преобразует 1-based строку/колонку в символьный offset в тексте. */
+function lineColToOffset(text, line, col) {
+  const rows = String(text || "").split("\n");
+  const targetLine = Math.max(1, Math.floor(Number(line) || 1));
+  let offset = 0;
+  for (let i = 0; i < Math.min(targetLine - 1, rows.length); i += 1) {
+    offset += rows[i].length + 1;
+  }
+  return offset + Math.max(0, (Number(col) || 1) - 1);
 }
 
 // function createStepDebugger etc. removed and archived to archive/step-execution.js
