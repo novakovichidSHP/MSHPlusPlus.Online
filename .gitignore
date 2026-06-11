@@ -15,6 +15,9 @@ build/
 tmp/
 temp/
 
+# C++ toolchain (emception artifacts, ~25 МБ runtime / hosted separately, см. assets/cpp-runtime/README.md)
+/toolchain/
+
 # Logs
 *.log
 npm-debug.log*
