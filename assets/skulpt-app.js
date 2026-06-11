@@ -47,6 +47,13 @@ const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Введите input и нажмит�
 const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Введите input и нажмите «Отправить»";
 
 const VALID_FILENAME = /^[A-Za-z0-9._\-\u0400-\u04FF]+$/;
+// \u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u043E\u0432 C++ (\u0435\u0434\u0438\u043D\u0438\u0446\u044B \u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 + \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438). \u0418\u043C\u044F \u0431\u0435\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u2192 .cpp.
+const SOURCE_EXTENSIONS = [".cpp", ".cc", ".cxx", ".c", ".hpp", ".hh", ".hxx", ".h"];
+const DEFAULT_SOURCE_EXTENSION = ".cpp";
+function hasSourceExtension(name) {
+  const lower = String(name || "").toLowerCase();
+  return SOURCE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
 const encoder = typeof TextEncoder !== "undefined"
   ? new TextEncoder()
   : {
@@ -1480,10 +1487,10 @@ function getDefaultModuleName() {
   const files = getCurrentFiles();
   const existing = new Set(files.map((file) => String(file.name || "").toLowerCase()));
   let index = 1;
-  let candidate = `module${index}.py`;
+  let candidate = `module${index}${DEFAULT_SOURCE_EXTENSION}`;
   while (existing.has(candidate)) {
     index += 1;
-    candidate = `module${index}.py`;
+    candidate = `module${index}${DEFAULT_SOURCE_EXTENSION}`;
   }
   return candidate;
 }
@@ -1503,9 +1510,9 @@ async function createFile() {
     return;
   }
   const trimmed = name.trim();
-  const normalized = normalizePythonFileName(trimmed);
+  const normalized = normalizeCppFileName(trimmed);
   if (!normalized) {
-    showToast("Можно создавать только модули .py.");
+    showToast("Поддерживаются модули .cpp/.cc/.h/.hpp.");
     return;
   }
   if (!validateFileName(normalized)) {
@@ -1559,9 +1566,9 @@ async function renameFile() {
     return;
   }
   const trimmed = nextName.trim();
-  const normalized = normalizePythonFileName(trimmed);
+  const normalized = normalizeCppFileName(trimmed);
   if (!normalized) {
-    showToast("Можно создавать только модули .py.");
+    showToast("Поддерживаются модули .cpp/.cc/.h/.hpp.");
     return;
   }
   if (normalized === state.activeFile) {
@@ -1667,12 +1674,14 @@ async function duplicateFile() {
   if (!file) {
     return;
   }
-  const baseName = file.name.replace(/\.py$/, "");
+  const dot = file.name.lastIndexOf(".");
+  const baseName = dot > 0 ? file.name.slice(0, dot) : file.name;
+  const ext = dot > 0 ? file.name.slice(dot) : DEFAULT_SOURCE_EXTENSION;
   let index = 1;
-  let newName = `${baseName}_copy.py`;
+  let newName = `${baseName}_copy${ext}`;
   while (getFileByName(newName)) {
     index += 1;
-    newName = `${baseName}_copy${index}.py`;
+    newName = `${baseName}_copy${index}${ext}`;
   }
 
   if (state.mode === "project") {
@@ -1695,7 +1704,7 @@ function validateFileName(name) {
   return VALID_FILENAME.test(name);
 }
 
-function normalizePythonFileName(name) {
+function normalizeCppFileName(name) {
   if (!name) {
     return null;
   }
@@ -1704,9 +1713,9 @@ function normalizePythonFileName(name) {
     return null;
   }
   if (!trimmed.includes(".")) {
-    return `${trimmed}.py`;
+    return `${trimmed}${DEFAULT_SOURCE_EXTENSION}`;
   }
-  if (!trimmed.toLowerCase().endsWith(".py")) {
+  if (!hasSourceExtension(trimmed)) {
     return null;
   }
   return trimmed;
@@ -2585,7 +2594,7 @@ async function importFiles(files) {
   for (const file of files) {
     const name = String(file.name || "");
     const lower = name.toLowerCase();
-    if (lower.endsWith(".py")) {
+    if (hasSourceExtension(lower)) {
       const content = await file.text();
       imports.push({ name, content });
       continue;
@@ -2609,11 +2618,11 @@ async function importFiles(files) {
     skipped += 1;
   }
   if (!imports.length) {
-    showToast("Не найдено .py файлов для импорта.");
+    showToast("Не найдено файлов .cpp/.h для импорта.");
     return;
   }
   if (skipped) {
-    showToast("Некоторые файлы пропущены (поддерживаются .py, .zip, .json).");
+    showToast("Некоторые файлы пропущены (поддерживаются .cpp/.h/.hpp, .zip, .json).");
   }
   await applyImportedFiles(imports);
 }
@@ -2632,7 +2641,7 @@ function extractPyFromZip(bytes) {
     if (!entryName || entryName.endsWith("/")) {
       continue;
     }
-    if (!entryName.toLowerCase().endsWith(".py")) {
+    if (!hasSourceExtension(entryName)) {
       continue;
     }
     const base = getBaseName(entryName);
@@ -2662,7 +2671,7 @@ function extractPyFromJson(text) {
       continue;
     }
     const name = String(file.name);
-    if (!name.toLowerCase().endsWith(".py")) {
+    if (!hasSourceExtension(name)) {
       continue;
     }
     out.push({ name, content: String(file.content || "") });
@@ -2682,7 +2691,7 @@ async function applyImportedFiles(imports) {
   let changed = false;
   let applyAllAction = null;
   for (const item of imports) {
-    const normalized = normalizePythonFileName(item.name);
+    const normalized = normalizeCppFileName(item.name);
     if (!normalized || !validateFileName(normalized)) {
       showToast(`Некорректное имя файла: ${item.name}`);
       continue;
@@ -2767,7 +2776,7 @@ async function resolveImportConflict(name, applyAllAction, added) {
       if (action === "rename") {
         const input = els.modal.querySelector("#import-new-name");
         const value = input ? input.value : "";
-        const normalized = normalizePythonFileName(value);
+        const normalized = normalizeCppFileName(value);
         if (!normalized || !validateFileName(normalized) || isNameTaken(normalized, added)) {
           showToast("Некорректное или занятое имя файла.");
           return;
@@ -3587,6 +3596,14 @@ function setSkulptTurtleAssets(assets) {
 
 const TEXT_ASSET_EXTENSIONS = new Set([
   ".py",
+  ".cpp",
+  ".cc",
+  ".cxx",
+  ".c",
+  ".h",
+  ".hpp",
+  ".hh",
+  ".hxx",
   ".txt",
   ".json",
   ".csv",
