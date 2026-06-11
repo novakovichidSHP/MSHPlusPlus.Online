@@ -12,6 +12,7 @@ import {
   resolveEditorMode
 } from "./utils/editor-mode-utils.js";
 import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js";
+import { lineColToOffset } from "./cpp-runtime/source-position.js";
 
 // Движок C++ (emception) — занимает место Skulpt. Инициализируется в initCppRuntime().
 // baseUrl относителен расположению cpp-runtime.js (assets/cpp-runtime/) → ../../toolchain/
@@ -3867,17 +3868,6 @@ function jumpToDiagnostic(item) {
     callEditorAdapterMethod("setSelection", { start: offset, end: offset });
   }
   callEditorAdapterMethod("focus");
-}
-
-/** Преобразует 1-based строку/колонку в символьный offset в тексте. */
-function lineColToOffset(text, line, col) {
-  const rows = String(text || "").split("\n");
-  const targetLine = Math.max(1, Math.floor(Number(line) || 1));
-  let offset = 0;
-  for (let i = 0; i < Math.min(targetLine - 1, rows.length); i += 1) {
-    offset += rows[i].length + 1;
-  }
-  return offset + Math.max(0, (Number(col) || 1) - 1);
 }
 
 // function createStepDebugger etc. removed and archived to archive/step-execution.js

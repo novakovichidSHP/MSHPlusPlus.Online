@@ -9,8 +9,8 @@
   "scripts": {
     "build:cm6": "node scripts/build-cm6-bundle.mjs",
     "test": "playwright test",
-    "test:unit": "node --test tests/unit/*.test.mjs",
-    "test:unit:coverage": "c8 -r text -r lcov node --test tests/unit/*.test.mjs",
+    "test:unit": "node --test tests/unit/*.test.mjs assets/cpp-runtime/*.test.mjs",
+    "test:unit:coverage": "c8 -r text -r lcov node --test tests/unit/*.test.mjs assets/cpp-runtime/*.test.mjs",
     "docs:api": "jsdoc -c jsdoc.json",
     "docs:api:check": "node scripts/check-api-docs.mjs /tmp/jsdoc-report.json"
   },
