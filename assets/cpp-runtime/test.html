@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cpp-runtime · тест-харнесс F1</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:18px;background:#0f1226;color:#e6e8f0}
+  h1{font-size:16px;margin:0 0 12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  button{font:13px system-ui;padding:7px 12px;border:1px solid #2c3160;background:#1a1f44;color:#dfe3ff;border-radius:7px;cursor:pointer}
+  button:hover{background:#222a5e}
+  button:disabled{opacity:.5;cursor:default}
+  #status{padding:6px 10px;border-radius:6px;background:#171a35;display:inline-block;margin-bottom:10px}
+  pre{background:#0a0c1c;border:1px solid #232850;border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-word;max-height:48vh;overflow:auto;margin:0}
+  .ok{color:#4ade80}.err{color:#f87171}.dim{color:#8b91b5}.warn{color:#fbbf24}
+  label{font-size:12px;color:#8b91b5}
+  input{background:#0a0c1c;border:1px solid #232850;color:#dfe3ff;border-radius:6px;padding:5px 8px;width:340px}
+</style>
+</head>
+<body>
+  <h1>cpp-runtime · тест-харнесс F1</h1>
+  <div class="row">
+    <label>baseUrl тулчейна: <input id="base" value="../" /></label>
+    <button id="btn-init">1 · init()</button>
+  </div>
+  <div class="row">
+    <button id="btn-hello" disabled>2 · hello + stdin</button>
+    <button id="btn-sort" disabled>3 · sort + cin (batch stdin)</button>
+    <button id="btn-err" disabled>4 · ошибка компиляции</button>
+    <button id="btn-loop" disabled>5 · бесконечный цикл (таймаут)</button>
+    <button id="btn-cancel" disabled>⏹ cancel</button>
+  </div>
+  <div id="status" class="dim">Ожидание init…</div>
+  <pre id="log"></pre>
+
+<script type="module">
+import { createCppRuntime } from "./cpp-runtime.js";
+
+const $ = (id) => document.getElementById(id);
+const logEl = $("log"), statusEl = $("status");
+function log(s, cls){ const t=document.createElement("span"); if(cls)t.className=cls; t.textContent=s+"\n"; logEl.appendChild(t); logEl.scrollTop=logEl.scrollHeight; }
+function status(s, cls){ statusEl.textContent=s; statusEl.className=cls||"dim"; }
+
+let rt = null;
+const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop"];
+const setRunEnabled = (on)=>runBtns.forEach(id=>$(id).disabled=!on);
+
+$("btn-init").onclick = async () => {
+  $("btn-init").disabled = true;
+  rt = createCppRuntime({ baseUrl: $("base").value });
+  status("init…", "warn");
+  log("→ init() с baseUrl="+$("base").value, "dim");
+  try {
+    await rt.init((ev)=>log("  ["+ev.phase+"] "+(ev.message||""), "dim"));
+    status("Готово — компилятор поднят ✓", "ok");
+    log("✓ init завершён", "ok");
+    setRunEnabled(true);
+  } catch(e){ status("init упал", "err"); log("✗ "+e.message, "err"); $("btn-init").disabled=false; }
+};
+
+async function compileRun(label, files, stdin, opts={}) {
+  setRunEnabled(false);
+  log("\n=== "+label+" ===", "warn");
+  status(label+": компиляция…", "warn");
+  const t0 = performance.now();
+  const c = await rt.compile(files);
+  log("compile: ok="+c.ok+" · "+Math.round(c.durationMs)+" мс · "+c.summary, c.ok?"ok":"err");
+  for (const it of c.diagnostics.items) {
+    log("  "+it.severity+" "+it.file+":"+it.line+":"+it.col+" — "+it.message, it.severity==="error"?"err":"dim");
+  }
+  if (!c.ok) { status(label+": ошибка компиляции (ожидаемо для #4)", "err"); if(!opts.expectFail) status(label+" FAIL", "err"); setRunEnabled(true); return; }
+
+  status(label+": запуск…", "warn");
+  $("btn-cancel").disabled = false;
+  const r = await rt.run({
+    stdin,
+    timeoutMs: opts.timeoutMs,
+    onStdout: (s)=>log(s.replace(/\n$/,""), "ok"),
+    onStderr: (s)=>log("[stderr] "+s.replace(/\n$/,""), "dim"),
+  });
+  $("btn-cancel").disabled = true;
+  log("run: exit="+r.exitCode+" timedOut="+r.timedOut+" cancelled="+r.cancelled+" truncated="+r.truncated+" · "+Math.round(r.durationMs)+" мс",
+      r.timedOut||r.error?"warn":"ok");
+  status(label+" — готово (за "+Math.round(performance.now()-t0)+" мс)", "ok");
+  setRunEnabled(true);
+}
+
+$("btn-hello").onclick = ()=>compileRun("hello + stdin",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <string>
+int main(){ std::string n; std::getline(std::cin,n);
+  std::cout << "Привет, " << n << "!\\n"; return 0; }`}],
+  "Мир\n");
+
+$("btn-sort").onclick = ()=>compileRun("sort + cin",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <numeric>
+int main(){ int n; std::cin>>n; std::vector<int> v(n);
+  for(auto&x:v) std::cin>>x; std::sort(v.begin(),v.end());
+  std::cout<<"n="<<n<<" sorted:"; for(int x:v) std::cout<<" "<<x;
+  std::cout<<" sum="<<std::accumulate(v.begin(),v.end(),0)<<"\\n"; }`}],
+  "5\n5 3 8 1 9\n");
+
+$("btn-err").onclick = ()=>compileRun("ошибка компиляции",
+  [{name:"main.cpp", content:
+`#include <iostream>
+int main(){ std::cot << "oops"; return 0; }`}],
+  "", {expectFail:true});
+
+$("btn-loop").onclick = ()=>compileRun("бесконечный цикл (таймаут 3с)",
+  [{name:"main.cpp", content:
+`int main(){ for(;;){} }`}],
+  "", {timeoutMs:3000});
+
+$("btn-cancel").onclick = ()=>{ rt && rt.cancelRun(); log("⏹ cancelRun()", "warn"); };
+</script>
+</body>
+</html>

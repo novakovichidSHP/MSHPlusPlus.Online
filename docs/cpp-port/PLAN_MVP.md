@@ -30,12 +30,20 @@
 - Проверить: таймаут компиляции, таймаут выполнения, перехват ошибок компилятора (текст + позиция).
 - Критерий: многофайловый C++17/20 со STL и `try/catch` компилируется/запускается, stdin/stdout работают.
 
-### F1. Слой движка выполнения `cpp-runtime`
-- Изолированный модуль в `assets/` — занимает «место Skulpt» в архитектуре.
-- API: `compile(files, flags)`, `run(stdin)`, `cancel()`, события вывода/ошибок.
-- Лимиты (адаптировать из оригинала): таймаут выполнения, `MAX_OUTPUT_BYTES`, лимиты файлов/проекта; **+ таймаут компиляции**.
+### F1. Слой движка выполнения `cpp-runtime` — ✅ ДОКАЗАНО (2026-06-11)
+> Реализовано в `assets/cpp-runtime/`, проверено руками в браузере (same-origin против `emc-demo`).
+> sort+cin → `n=5 sorted: 1 3 5 8 9 sum=26` (exit 0, ~40 мс); ошибка компиляции → диагностика `main.cpp:2:18`
+> (errorCount 1); бесконечный цикл → `timedOut=true` (terminate worker'а). Парсер: 5/5 unit-тестов (`node --test`).
+- Изолированный модуль в `assets/cpp-runtime/` — занимает «место Skulpt» в архитектуре.
+  - `cpp-runtime.js` (фасад, Comlink→compiler worker), `exec-worker.js` (терминируемый запуск),
+    `diagnostics.js` (+`*.test.mjs`), `vendor/comlink.min.mjs`, `test.html`, `README.md`.
+- API: `createCppRuntime().init/compile(files)/run({stdin,timeoutMs,onStdout,onStderr})/cancelRun()/dispose()`.
+- Лимиты (зеркало `CONFIG`): таймаут выполнения, `MAX_OUTPUT_BYTES`, лимиты файлов/проекта; **+ таймаут компиляции**.
 - Дефолтные флаги: `-O2 -std=c++20 -fexceptions` (язык C++20; библиотека — по факту тулчейна).
 - Без сети/потоков/реальной ФС (песочница WASI/emscripten).
+- **⚠️ Тулчейн = same-origin** (worker фетчит sysroot из `self.location`); в репо НЕ коммитим (~600 МБ) —
+  отдельная задача деплоя (`/toolchain/` на том же origin). Детали — `assets/cpp-runtime/README.md`.
+- **На потом:** сообщение clang в диагностике длинновато (склейка «did you mean»+сниппет) — косметика для F4.
 
 ### F2. Интеграция в существующий app
 - Заменить вызовы Skulpt на `cpp-runtime` в `assets/skulpt-app.js` (точки: запуск, нормализация, точка входа, остановка).
