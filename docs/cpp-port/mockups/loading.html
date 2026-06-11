@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Макет — Загрузка тулчейна</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --azure:#1c6bff; --cyan:#20c5e7; --magenta:#e0218a; --green:#36d07f;
+    --ink:#ece8ff; --muted:#b3a9da; --faint:#8579b8;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:"Inter",system-ui,sans-serif;color:var(--ink);background:#160b34;
+    background:radial-gradient(1200px 700px at 78% -10%, #3a1d7a 0%, rgba(58,29,122,0) 60%),
+               radial-gradient(900px 600px at 8% 110%, #2a1566 0%, rgba(42,21,102,0) 55%),
+               linear-gradient(160deg,#1a0e3d 0%,#241152 100%);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+  .stripe{position:absolute;width:240%;height:64px;background:linear-gradient(90deg,rgba(224,33,138,0),var(--magenta),rgba(224,33,138,0));transform:rotate(-32deg);opacity:.5;filter:blur(.3px)}
+  .stripe.a{top:9%;left:-70%;height:30px;opacity:.45}
+  .stripe.b{bottom:13%;right:-70%;opacity:.4}
+  .stripe.c{bottom:24%;right:-60%;height:12px;background:linear-gradient(90deg,rgba(32,197,231,0),var(--cyan),rgba(32,197,231,0));opacity:.5}
+
+  .card{position:relative;width:560px;max-width:92vw;text-align:center;padding:8px 8px 0}
+  .logo{width:74px;height:74px;border-radius:18px;background:#fff;display:flex;align-items:center;justify-content:center;padding:11px;margin:0 auto 22px;box-shadow:0 12px 40px rgba(28,107,255,.35)}
+  .logo img{width:100%;height:100%;object-fit:contain;display:block}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#ffb3da;background:rgba(224,33,138,.16);border:1px solid rgba(224,33,138,.32);padding:5px 13px;border-radius:30px;margin-bottom:18px}
+  .pill .d{width:6px;height:6px;border-radius:50%;background:var(--magenta)}
+  h1{font-size:27px;font-weight:600;letter-spacing:-.4px;margin:0 0 10px;line-height:1.25}
+  h1 .c{color:var(--cyan)}
+  .sub{font-size:14.5px;color:var(--muted);margin:0 auto 30px;max-width:420px;line-height:1.55}
+
+  .bar-meta{display:flex;justify-content:space-between;align-items:baseline;margin:0 4px 9px;font-size:13px}
+  .bar-meta .lbl{color:var(--muted)}
+  .bar-meta .val{font-family:var(--mono);color:var(--ink);font-size:13px}
+  .bar-meta .pct{color:var(--cyan);font-weight:600}
+  .track{height:11px;border-radius:30px;background:rgba(255,255,255,.10);overflow:hidden;border:1px solid rgba(255,255,255,.07)}
+  .fill{height:100%;width:64%;border-radius:30px;background:linear-gradient(90deg,var(--azure),var(--cyan))}
+
+  .steps{margin:30px auto 0;max-width:430px;text-align:left;display:flex;flex-direction:column;gap:3px}
+  .step{display:flex;align-items:center;gap:13px;padding:11px 14px;border-radius:12px}
+  .step.done{color:var(--ink)}
+  .step.active{color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+  .step.todo{color:var(--faint)}
+  .si{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .si.done{background:rgba(54,208,127,.18);color:var(--green)}
+  .si.active{background:rgba(32,197,231,.16);color:var(--cyan)}
+  .si.todo{background:rgba(255,255,255,.06);color:var(--faint)}
+  .si svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .step .txt{font-size:14px;font-weight:500}
+  .step .meta{margin-left:auto;font-size:12px;font-family:var(--mono)}
+  .step.done .meta{color:var(--green)}
+  .step.active .meta{color:var(--cyan)}
+  .step.todo .meta{color:var(--faint)}
+  .spin{width:14px;height:14px;border-radius:50%;border:2px solid rgba(32,197,231,.25);border-top-color:var(--cyan);animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .note{margin:28px auto 8px;display:inline-flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);padding:9px 15px;border-radius:30px}
+  .note svg{width:15px;height:15px;stroke:var(--cyan);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+  <div class="stripe a"></div>
+  <div class="stripe b"></div>
+  <div class="stripe c"></div>
+
+  <div class="card">
+    <div class="logo"><img src="/assets/shp-logo.webp" alt="МШП" /></div>
+    <div class="pill"><span class="d"></span>Web IDE C++ · C++20</div>
+    <h1>Готовим <span class="c">компилятор C++</span><br>прямо в браузере</h1>
+    <p class="sub">Первый запуск загружает clang — настоящий компилятор работает локально, без сервера. Дальше всё мгновенно.</p>
+
+    <div class="bar-meta">
+      <span class="lbl">Загрузка тулчейна · clang + lld</span>
+      <span><span class="val">38 МБ / 60 МБ</span> · <span class="pct">64%</span></span>
+    </div>
+    <div class="track"><div class="fill"></div></div>
+
+    <div class="steps">
+      <div class="step done">
+        <span class="si done"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 7"/></svg></span>
+        <span class="txt">Загрузка runtime</span>
+        <span class="meta">готово</span>
+      </div>
+      <div class="step active">
+        <span class="si active"><span class="spin"></span></span>
+        <span class="txt">Загрузка компилятора clang</span>
+        <span class="meta">38 / 60 МБ</span>
+      </div>
+      <div class="step todo">
+        <span class="si todo"><svg viewBox="0 0 24 24"><path d="M12 8v8M8 12h8"/></svg></span>
+        <span class="txt">Распаковка стандартной библиотеки</span>
+        <span class="meta">ожидание</span>
+      </div>
+    </div>
+
+    <div class="note"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Компилятор кешируется — следующий вход будет без загрузки</div>
+  </div>
+</body>
+</html>

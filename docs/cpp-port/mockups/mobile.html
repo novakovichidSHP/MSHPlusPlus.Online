@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Макет — Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --surface:#fff; --surface-2:#fbfcfd; --surface-3:#f1f4f9;
+    --border:#e7e9ee; --border-strong:#dadde4;
+    --text:#16213c; --muted:#5b647a; --faint:#98a0b0;
+    --azure:#1c6bff; --cyan:#20c5e7; --azure-weak:#eaf2ff; --magenta:#e0218a; --magenta-weak:#fdeaf4; --green:#16a34a; --green-weak:#e9f7ef;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+    --kw:#8250df;--ty:#0550ae;--st:#0a7d33;--nu:#b35900;--pre:#cf4d2c;--pu:#57606a;--fn:#6639ba;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Inter",system-ui,sans-serif;color:var(--text);
+    background:linear-gradient(160deg,#efeaff,#eaf2ff);min-height:100vh;padding:34px 16px;
+    display:flex;gap:34px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+  .phone{width:330px;background:#0c0a1e;border-radius:38px;padding:11px;box-shadow:0 30px 70px rgba(28,17,64,.3)}
+  .screen{background:var(--surface);border-radius:29px;overflow:hidden;height:660px;display:flex;flex-direction:column;position:relative}
+  .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:108px;height:26px;background:#0c0a1e;border-radius:16px;z-index:3}
+
+  .appbar{display:flex;align-items:center;gap:9px;padding:30px 14px 11px;border-bottom:1px solid var(--border)}
+  .logo{width:30px;height:30px;border-radius:8px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:3px}
+  .logo img{width:100%;height:100%;object-fit:contain}
+  .appttl{font-weight:600;font-size:13px;line-height:1.15}
+  .appsub{font-size:10px;color:var(--faint)}
+  .run{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--azure);color:#fff;border:none;padding:7px 12px;border-radius:8px}
+  .run svg{width:13px;height:13px;fill:#fff}
+
+  .cardtop{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+  .cardtop .t{font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--faint)}
+  .chip-std{font-size:10px;font-weight:600;color:#a8156a;background:var(--magenta-weak);padding:3px 8px;border-radius:20px}
+
+  .body{flex:1;display:flex;min-height:0;overflow:hidden}
+  .gutter{padding:12px 0;width:30px;text-align:right;color:var(--faint);font-family:var(--mono);font-size:11.5px;line-height:20px;background:var(--surface-2);border-right:1px solid var(--border)}
+  .gutter span{display:block;padding-right:8px}
+  .code{flex:1;padding:12px 12px;font-family:var(--mono);font-size:11.5px;line-height:20px;white-space:pre;overflow:hidden}
+  .kw{color:var(--kw)}.ty{color:var(--ty)}.st{color:var(--st)}.nu{color:var(--nu)}.pre{color:var(--pre)}.pu{color:var(--pu)}.fn{color:var(--fn)}
+
+  .console{flex:1;padding:13px 15px;font-family:var(--mono);font-size:11.5px;line-height:19px;overflow:hidden}
+  .seg-l{font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--faint);font-family:"Inter";margin-bottom:5px}
+  .ok{color:var(--green)} .dim{color:var(--faint)}
+  .seg{margin-bottom:12px}
+  .stdin{margin:6px 15px 0;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface-2);padding:9px 11px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .stdin-l{font-size:9.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--faint);padding:0 15px;margin-top:11px;margin-bottom:5px}
+
+  .nav{display:flex;border-top:1px solid var(--border);background:var(--surface)}
+  .nav button{flex:1;border:none;background:transparent;padding:10px 0 13px;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--faint);font-size:10.5px;font-weight:500;cursor:pointer}
+  .nav button.active{color:var(--azure)}
+  .nav svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .nav .ind{position:absolute}
+  .caption{width:100%;text-align:center;font-size:12px;color:#6b6391;margin-top:-16px}
+</style>
+</head>
+<body>
+
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="appbar">
+        <div class="logo"><img src="/assets/shp-logo.webp" alt="МШП"/></div>
+        <div><div class="appttl">Сортировка массива</div><div class="appsub">main.cpp · сохранено</div></div>
+        <button class="run"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg>Запуск</button>
+      </div>
+      <div class="cardtop"><span class="t">Редактор</span><span class="chip-std">C++20</span></div>
+      <div class="body">
+        <div class="gutter"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div>
+        <div class="code"><span class="pre">#include</span> <span class="st">&lt;iostream&gt;</span>
+<span class="pre">#include</span> <span class="st">&lt;vector&gt;</span>
+<span class="pre">#include</span> <span class="st">&lt;algorithm&gt;</span>
+<span class="kw">using namespace</span> std<span class="pu">;</span>
+<span class="ty">int</span> <span class="fn">main</span><span class="pu">() {</span>
+  vector<span class="pu">&lt;</span><span class="ty">int</span><span class="pu">&gt;</span> v<span class="pu">{</span><span class="nu">5</span>,<span class="nu">3</span>,<span class="nu">8</span>,<span class="nu">1</span><span class="pu">};</span>
+  <span class="fn">sort</span><span class="pu">(</span>v.<span class="fn">begin</span><span class="pu">(),</span>v.<span class="fn">end</span><span class="pu">());</span>
+  <span class="kw">for</span><span class="pu">(</span><span class="ty">int</span> x:v<span class="pu">)</span> cout<span class="pu">&lt;&lt;</span>x<span class="pu">&lt;&lt;</span><span class="st">" "</span><span class="pu">;</span>
+<span class="pu">}</span></div>
+      </div>
+      <nav class="nav">
+        <button><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Модули</button>
+        <button class="active"><svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>Редактор</button>
+        <button><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg>Консоль</button>
+      </nav>
+    </div></div>
+    <div class="caption">Карточка «Редактор»</div>
+  </div>
+
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="appbar">
+        <div class="logo"><img src="/assets/shp-logo.webp" alt="МШП"/></div>
+        <div><div class="appttl">Сортировка массива</div><div class="appsub">main.cpp · сохранено</div></div>
+        <button class="run"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg>Запуск</button>
+      </div>
+      <div class="cardtop"><span class="t">Консоль</span><span class="dim" style="font-size:11px">код 0</span></div>
+      <div class="console">
+        <div class="seg"><div class="seg-l">Компиляция</div><span class="ok">✓ Сборка успешна</span> <span class="dim">· 0.6 с</span></div>
+        <div class="seg"><div class="seg-l">Вывод программы</div>1 3 5 8</div>
+      </div>
+      <div class="stdin-l">Ввод · stdin</div>
+      <div class="stdin">Данные для std::cin…</div>
+      <nav class="nav" style="margin-top:13px">
+        <button><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/></svg>Модули</button>
+        <button><svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/></svg>Редактор</button>
+        <button class="active"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg>Консоль</button>
+      </nav>
+    </div></div>
+    <div class="caption">Карточка «Консоль» + ввод</div>
+  </div>
+
+</body>
+</html>

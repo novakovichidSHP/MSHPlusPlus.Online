@@ -1,0 +1,100 @@
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Coverage
+        run: npm run test:unit:coverage
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage/lcov.info
+
+  e2e-editor-linux:
+    needs: unit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Full IDE spec (matrix)
+        run: npx playwright test -c playwright.editor-matrix.config.cjs tests/ide.spec.js tests/ide.legacy.spec.js --project=${{ matrix.browser }}
+
+  e2e-editor-webkit-macos:
+    needs: unit
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci
+      - name: Install Playwright WebKit
+        run: npx playwright install webkit
+      - name: Full IDE spec (webkit)
+        run: npx playwright test -c playwright.editor-matrix.config.cjs tests/ide.spec.js tests/ide.legacy.spec.js --project=webkit
+
+  docs:
+    if: "${{ github.event_name == 'push' && !contains(github.event.head_commit.message, 'docs: auto-update API docs') }}"
+    needs: unit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci
+      - name: Generate API docs
+        run: npm run docs:api
+      - name: Build JSDoc report JSON
+        run: npx jsdoc -X -c jsdoc.json > /tmp/jsdoc-report.json
+      - name: Verify docs coverage for key runtime methods
+        run: npm run docs:api:check
+      - name: Commit updated docs/api
+        run: |
+          if git diff --quiet -- docs/api; then
+            echo "No API docs changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/api
+          git commit -m "docs: auto-update API docs [skip ci]"
+          git push

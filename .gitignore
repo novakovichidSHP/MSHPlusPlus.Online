@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Test and coverage output
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# Build and generated output
+dist/
+build/
+.cache/
+.parcel-cache/
+tmp/
+temp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+.npmrc.local
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-local drafts and legacy files
+/ТЗ фронтенд only.md
+archive/
+!assets/archive/
+!assets/archive/editor-syntax-preset-legacy.css
+SHAPES_DEBUG.md
+teacher_guide.md
+student_guide.md
+playwright.config.cjs
+
+# Local AI agent context
+.agent/
+.agents/
+.claude/
+.codex/

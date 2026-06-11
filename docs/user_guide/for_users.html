@@ -1,0 +1,3471 @@
+﻿<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%9D%93%3C/text%3E%3C/svg%3E" />
+  <title>Руководство по МШПайтон.Онлайн</title>
+  <style>
+    @font-face {
+      font-family: "Rubik";
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url("../../assets/fonts/rubik-cyrillic.woff2") format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
+    @font-face {
+      font-family: "Rubik";
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url("../../assets/fonts/rubik-latin.woff2") format("woff2");
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400 600;
+      font-display: swap;
+      src: url("../../assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+    }
+
+    :root {
+      color-scheme: light;
+      --bg: #f5f9ff;
+      --bg-2: #eaf3ff;
+      --panel: #ffffff;
+      --panel-2: #eef4ff;
+      --border: #c7d8f2;
+      --text: #0f1f3a;
+      --muted: #5b6b84;
+      --accent: #1c6bff;
+      --accent-2: #1ab5d8;
+      --snapshot-banner-bg: #e7f7ec;
+      --snapshot-banner-border: #9fdab4;
+      --snapshot-banner-text: #1a5b35;
+      --remix-btn-bg: #39c273;
+      --remix-btn-bg-hover: #2fb164;
+      --remix-btn-border: #2da35d;
+      --remix-btn-outline: rgba(57, 194, 115, 0.28);
+      --danger: #e04b4b;
+      --shadow: 0 18px 35px rgba(18, 54, 110, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Rubik", sans-serif;
+      background: radial-gradient(circle at top, #d8e9ff 0%, var(--bg) 45%, #f7fbff 100%);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow: auto;
+    }
+
+    .ambient {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(26, 181, 216, 0.18), transparent 45%),
+        radial-gradient(circle at 80% 10%, rgba(28, 107, 255, 0.2), transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(125, 199, 255, 0.2), transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9Ii4wMiI+PHJlY3Qgd2lkdGg9IjIiIGhlaWdodD0iMiIgeD0iMSIgeT0iMSIvPjxyZWN0IHdpZHRoPSIyIiBoZWlnaHQ9IjIiIHg9IjIzIiB5PSIxNSIvPjxyZWN0IHdpZHRoPSIyIiBoZWlnaHQ9IjIiIHg9IjEyIiB5PSIyOSIvPjxyZWN0IHdpZHRoPSIyIiBoZWlnaHQ9IjIiIHg9IjMzIiB5PSIzMyIvPjxyZWN0IHdpZHRoPSIyIiBoZWlnaHQ9IjIiIHg9IjI5IiB5PSIyIi8+PHJlY3Qgd2lkdGg9IjIiIGhlaWdodD0iMiIgeD0iNiIgeT0iMjAiLz48L2c+PC9zdmc+");
+      opacity: 0.2;
+      mix-blend-mode: soft-light;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+    }
+
+    .btn.primary {
+      background: linear-gradient(120deg, #1c6bff 0%, #20c5e7 100%);
+      color: #ffffff;
+      border: none;
+    }
+
+    .btn.danger {
+      background: linear-gradient(120deg, #e04b4b 0%, #ff8a7a 100%);
+      border: none;
+      color: #ffffff;
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .btn.chip {
+      padding: 8px 10px;
+      font-size: 12px;
+      background: var(--panel-2);
+    }
+
+    .btn.inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn.small {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .btn.tiny {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      padding: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      opacity: 0.5;
+      transition: all 0.2s ease;
+      line-height: 1;
+    }
+
+    .btn-icon:hover {
+      opacity: 1;
+      background: rgba(28, 107, 255, 0.1);
+      transform: scale(1.1);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .topbar-center {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-link {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      background: #f7f9ff;
+      border: 1px solid var(--border);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .project-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .project-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .project-title {
+      font-size: 16px;
+      font-weight: 600;
+      max-width: 420px;
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-mode {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-right .top-actions {
+      margin-left: auto;
+    }
+
+    .snapshot-banner {
+      margin: 0;
+      padding: 7px 11px;
+      border-radius: 12px;
+      background: var(--snapshot-banner-bg);
+      border: 1px solid var(--snapshot-banner-border);
+      font-size: 12px;
+      color: var(--snapshot-banner-text);
+      display: inline-flex;
+      align-items: center;
+      max-width: 420px;
+      line-height: 1.35;
+    }
+
+    .top-actions .btn.snapshot-accent {
+      background: var(--remix-btn-bg);
+      border-color: var(--remix-btn-border);
+      color: #ffffff;
+    }
+
+    .top-actions .btn.snapshot-accent:hover {
+      background: var(--remix-btn-bg-hover);
+      border-color: var(--remix-btn-border);
+      box-shadow: 0 0 0 3px var(--remix-btn-outline);
+    }
+
+    .topbar-restart {
+      padding: 8px 12px;
+      font-size: 12px;
+      border-color: rgba(224, 75, 75, 0.4);
+      color: #b43b3b;
+    }
+
+    .topbar-restart:hover {
+      background: rgba(224, 75, 75, 0.08);
+    }
+
+    .save-indicator {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .guide-module-panel {
+      max-width: 240px;
+      width: 100%;
+    }
+
+    .guide-editor-pane {
+      max-width: 720px;
+      width: 100%;
+    }
+
+    .guide-console-pane,
+    .guide-turtle-pane {
+      max-width: 440px;
+      width: 100%;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(236, 243, 255, 0.95);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .panel-title {
+      font-weight: 600;
+      font-size: 14px;
+      flex: 1 1 120px;
+      min-width: 0;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .panel-actions-files {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(2, max-content);
+      gap: 6px 8px;
+      justify-content: end;
+      align-items: center;
+      margin-left: auto;
+    }
+
+    .panel-actions-files .btn.small {
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+
+    .guide-actions-grid {
+      grid-template-columns: repeat(2, max-content);
+    }
+
+    .guide-actions-grid>div {
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+    }
+
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 240px 1fr 440px;
+      grid-template-rows: 1fr auto;
+      gap: 16px;
+      padding: 16px 20px 20px;
+      overflow: auto;
+      min-height: 620px;
+    }
+
+    .workspace.no-turtle {
+      grid-template-columns: 240px 1fr;
+    }
+
+    .workspace.no-turtle .turtle-pane {
+      display: none;
+    }
+
+    .workspace .console-pane {
+      grid-column: 2 / 3;
+      grid-row: 2 / 3;
+      min-height: 140px;
+    }
+
+    .workspace:not(.no-turtle) .console-pane {
+      height: 160px;
+    }
+
+    .workspace.no-turtle .console-pane {
+      min-height: 200px;
+    }
+
+    .workspace.console-right {
+      grid-template-columns: 240px minmax(0, 1fr) 320px 440px;
+      grid-template-rows: 1fr;
+    }
+
+    .workspace.console-right.no-turtle {
+      grid-template-columns: 240px minmax(0, 1fr) 320px;
+    }
+
+    .workspace.console-right .sidebar {
+      grid-row: 1 / 2;
+    }
+
+    .workspace.console-right .editor-pane {
+      grid-column: 2 / 3;
+      grid-row: 1 / 2;
+    }
+
+    .workspace.console-right .console-pane {
+      grid-column: 3 / 4;
+      grid-row: 1 / 2;
+      min-height: 0;
+      height: auto;
+    }
+
+    .workspace.console-right .turtle-pane {
+      grid-column: 4 / 5;
+      grid-row: 1 / 2;
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 0.6fr);
+      gap: 16px;
+      overflow: hidden;
+      grid-row: 1 / 3;
+      min-height: 0;
+    }
+
+    .file-list,
+    .asset-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: auto;
+      max-height: 100%;
+    }
+
+    .file-list-label {
+      padding: 10px 12px 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .file-item,
+    .asset-item {
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: rgba(236, 243, 255, 0.8);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .file-item.active {
+      border-color: rgba(26, 181, 216, 0.6);
+      background: rgba(26, 181, 216, 0.12);
+    }
+
+    .file-item span,
+    .asset-item span {
+      font-size: 13px;
+    }
+
+    .editor-pane {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(236, 243, 255, 0.95);
+    }
+
+    .editor-actions,
+    .editor-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .editor-controls {
+      flex-wrap: nowrap;
+    }
+
+    .editor-actions .run-status {
+      padding-left: 10px;
+      border-left: 1px solid var(--border);
+    }
+
+    .run-status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(236, 243, 255, 0.95);
+      overflow-x: auto;
+    }
+
+    .tab {
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      background: rgba(236, 243, 255, 0.9);
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      border-color: rgba(28, 107, 255, 0.4);
+      background: rgba(28, 107, 255, 0.12);
+      color: #0f1f3a;
+    }
+
+    .editor-wrap {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      --code-font: "JetBrains Mono", monospace;
+      --code-font-size: 14px;
+      --code-line-height: 22px;
+      font-family: var(--code-font);
+      font-size: var(--code-font-size);
+      line-height: var(--code-line-height);
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0, "calt" 0;
+    }
+
+    .line-numbers {
+      padding: 14px 10px 14px 12px;
+      background: rgba(236, 243, 255, 0.95);
+      border-right: 1px solid var(--border);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      text-align: right;
+      white-space: pre;
+      user-select: none;
+      overflow: auto;
+      min-width: 44px;
+      scrollbar-width: none;
+    }
+
+    .line-numbers::-webkit-scrollbar {
+      display: none;
+    }
+
+    .editor-stack {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .editor-highlight {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      padding: 14px 16px;
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow: auto;
+      pointer-events: none;
+      scrollbar-width: none;
+      z-index: 1;
+    }
+
+    .editor-highlight::-webkit-scrollbar {
+      display: none;
+    }
+
+    .editor-highlight .token.keyword {
+      color: #1c6bff;
+      font-weight: 600;
+    }
+
+
+    .editor-highlight .token.comment {
+      color: #7a889f;
+      font-style: italic;
+    }
+
+    .editor-highlight .token.number {
+      color: #c25727;
+    }
+
+    .editor-highlight .token.builtin {
+      color: #0f7fa6;
+    }
+
+    .editor {
+      position: absolute;
+      inset: 0;
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: transparent;
+      caret-color: var(--text);
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      padding: 14px 16px;
+      resize: none;
+      tab-size: 4;
+      z-index: 1;
+    }
+
+    .console-pane {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .console-output {
+      flex: 1;
+      margin: 0;
+      padding: 12px 14px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      overflow: auto;
+      background: rgba(243, 247, 255, 0.95);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .console-input-row {
+      display: flex;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      background: rgba(236, 243, 255, 0.95);
+    }
+
+    .console-input {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--text);
+      padding: 10px 12px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+    }
+
+    .turtle-pane {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 500px;
+    }
+
+    .turtle-header {
+      gap: 10px;
+    }
+
+    .turtle-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .turtle-speed {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .turtle-speed input[type="range"] {
+      width: 120px;
+      accent-color: var(--accent);
+    }
+
+    .turtle-host {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      position: relative;
+    }
+
+    .turtle-canvas {
+      width: 400px;
+      height: 400px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .turtle-countdown {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0.9);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .turtle-countdown.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(220, 232, 249, 0.6);
+      display: grid;
+      place-items: center;
+      z-index: 12;
+    }
+
+    .modal-card {
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      width: min(420px, 90vw);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-title {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .modal-help {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .modal-input {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+    }
+
+    .hotkeys-list {
+      margin: 12px 0 0;
+      padding-left: 18px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .hotkeys-list li {
+      margin-bottom: 6px;
+    }
+
+    .toasts {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .toast {
+      position: fixed;
+      background: linear-gradient(135deg, rgba(28, 107, 255, 0.98), rgba(32, 197, 231, 0.98));
+      color: #ffffff;
+      border: 2px solid rgba(255, 255, 255, 0.7);
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 18px 35px rgba(18, 54, 110, 0.35);
+      max-width: min(360px, 70vw);
+      transform: translateY(6px);
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .guide-header {
+      position: relative;
+      z-index: 1;
+      padding: 24px 0 0;
+    }
+
+    .guide-content {
+      width: min(1200px, 92vw);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+      padding-bottom: 64px;
+    }
+
+    .guide-hero {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .guide-hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    .guide-hero p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .guide-section {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .guide-section h2 {
+      margin: 0 0 16px;
+    }
+
+    .guide-section h2+p,
+    .guide-section h3+p,
+    .guide-section h4+p {
+      margin-top: 8px;
+    }
+
+    .guide-content a {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .toc {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .toc li {
+      margin: 0;
+    }
+
+    .toc a {
+      text-decoration: none;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .toc ul {
+      list-style: none;
+      padding-left: 16px;
+      margin: 6px 0 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .toc ul a {
+      font-weight: 500;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .toc-group-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 8px 0 2px;
+    }
+
+    .floating-toc {
+      position: fixed;
+      right: 2vw;
+      top: 40%;
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px;
+    }
+
+    .floating-toc-button {
+      min-width: 72px;
+      height: 44px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: var(--shadow);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: transform 0.2s ease;
+    }
+
+    .floating-toc-button:hover {
+      transform: translateY(-2px);
+    }
+
+
+    .collapsible {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0;
+      background: rgba(236, 243, 255, 0.6);
+      margin-bottom: 16px;
+    }
+
+    .collapsible summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .collapsible summary h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .collapsible summary h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .collapsible.level-4 summary {
+      padding: 12px 16px;
+      font-size: 16px;
+    }
+
+    .collapsible.level-4 summary::before {
+      font-size: 16px;
+    }
+
+    .collapsible summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .collapsible summary::before {
+      content: "▾";
+      font-size: 18px;
+      transition: transform 0.2s ease;
+      color: var(--accent);
+    }
+
+    .collapsible:not([open]) summary::before {
+      transform: rotate(-90deg);
+    }
+
+    .collapsible-body {
+      padding: 12px 18px 18px 18px;
+      border-top: 1px solid rgba(199, 216, 242, 0.6);
+    }
+
+    .gif-block {
+      padding: 12px;
+      background: rgba(236, 243, 255, 0.75);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 8px 0 4px;
+    }
+
+    .gif-block img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .step-card {
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px dashed rgba(28, 107, 255, 0.3);
+      background: rgba(255, 255, 255, 0.9);
+      display: grid;
+      gap: 12px;
+    }
+
+    .feedback {
+      padding: 0;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .recent-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .recent-card {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .recent-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .recent-card small {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+
+    .recent-actions-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .btn.square {
+      padding: 6px;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .recent-actions-row .btn.small {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .recent-actions-row .recent-open {
+      height: 26px;
+      min-width: 108px;
+      padding: 4px 12px;
+    }
+
+    .recent-actions-row .btn.square {
+      width: 26px;
+      height: 26px;
+      padding: 4px;
+      font-size: 13px;
+    }
+
+    .recent-actions-row .btn.square.danger {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+
+    .recent-actions-row .btn.square.danger:hover {
+      background: rgba(224, 75, 75, 0.08);
+    }
+
+    .label-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .label-grid.single-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .label-item {
+      padding: 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .main-note {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 14px 0 0;
+    }
+
+    .main-note em {
+      font-style: normal;
+    }
+
+    .important-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 6px 0;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(224, 75, 75, 0.12);
+      color: var(--danger);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .label-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .action-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      text-align: center;
+      max-width: 140px;
+      line-height: 1.2;
+      white-space: normal;
+    }
+
+    .inline-actions {
+      display: grid;
+      gap: 6px;
+    }
+
+    .guide-note {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(28, 107, 255, 0.3);
+      background: rgba(28, 107, 255, 0.08);
+      font-size: 14px;
+    }
+
+    .code-block {
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      background: rgba(243, 247, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      overflow: auto;
+      font-size: 14px;
+    }
+
+    .restart-screen {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 31, 58, 0.9);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      z-index: 20;
+      font-size: clamp(20px, 4vw, 40px);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .sandbox {
+      position: relative;
+      z-index: 1;
+      padding: 32px 0 64px;
+    }
+
+    .sandbox-frame {
+      width: 100%;
+      margin: 0;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sandbox-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(236, 243, 255, 0.95);
+    }
+
+    .sandbox-view {
+      display: none;
+      padding: 24px;
+      overflow: auto;
+    }
+
+    #sandbox-ide {
+      padding: 0;
+    }
+
+    .sandbox-view.active {
+      display: block;
+    }
+
+    .sandbox-home-content {
+      display: grid;
+      gap: 20px;
+    }
+
+    .sandbox-ide {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sandbox-column {
+      display: grid;
+      gap: 16px;
+    }
+
+    .sandbox-mobile-nav {
+      display: none;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.98);
+    }
+
+    .sandbox-mobile-nav-btn {
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(236, 243, 255, 0.95);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .sandbox-mobile-nav-btn.active {
+      border-color: rgba(28, 107, 255, 0.45);
+      background: rgba(28, 107, 255, 0.14);
+    }
+
+    .sandbox-card-hidden {
+      display: none !important;
+    }
+
+    .page-footer {
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      padding: 20px 0 32px;
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 1200px) {
+      .workspace {
+        grid-template-columns: 220px 1fr;
+        grid-template-rows: minmax(0, 1fr) 200px 200px;
+      }
+
+      .editor-pane {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+      }
+
+      .turtle-pane {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
+      }
+
+      .console-pane {
+        grid-column: 2 / 3;
+        grid-row: 3 / 4;
+      }
+
+      .sidebar {
+        grid-row: 1 / 4;
+      }
+
+      .workspace.no-turtle {
+        grid-template-columns: 220px 1fr;
+        grid-template-rows: minmax(0, 1fr) 200px;
+      }
+
+      .workspace.no-turtle .console-pane {
+        grid-row: 2 / 3;
+      }
+
+      .workspace.no-turtle .editor-pane {
+        grid-row: 1 / 2;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .guide-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .label-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .topbar-left {
+        justify-content: space-between;
+      }
+
+      .topbar-right {
+        justify-content: flex-start;
+      }
+
+      .topbar-right .top-actions {
+        margin-left: 0;
+      }
+
+      .btn {
+        white-space: normal;
+      }
+
+      .panel-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      html,
+      body {
+        overflow-x: hidden;
+      }
+
+      .guide-header {
+        padding: 12px 0 0;
+      }
+
+      .guide-content {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        gap: 12px;
+        padding-left: 0;
+        padding-right: 0;
+        padding-bottom: 40px;
+      }
+
+      .guide-hero,
+      .guide-section {
+        width: 100%;
+        max-width: none;
+        padding: 14px 12px;
+        border-radius: 12px;
+      }
+
+      .guide-hero h1 {
+        font-size: clamp(22px, 6vw, 30px);
+      }
+
+      .guide-hero p,
+      .guide-note,
+      .label-item,
+      .feedback {
+        font-size: 13px;
+      }
+
+      .floating-toc {
+        right: 10px;
+        top: auto;
+        bottom: 10px;
+      }
+
+      .floating-toc-panel {
+        display: none;
+      }
+
+      .floating-toc-button {
+        min-width: 56px;
+        height: 40px;
+        border-radius: 12px;
+        font-size: 12px;
+      }
+
+      .collapsible summary {
+        padding: 12px 14px;
+        font-size: 16px;
+      }
+
+      .collapsible summary h3 {
+        font-size: 16px;
+      }
+
+      .collapsible summary h4 {
+        font-size: 15px;
+      }
+
+      .collapsible-body {
+        padding: 10px 12px 14px;
+      }
+
+      .step-card {
+        padding: 12px;
+      }
+
+      .recent-list {
+        grid-template-columns: 1fr;
+      }
+
+      .recent-actions-row {
+        width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .recent-actions-row .recent-open {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .label-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .guide-console-pane,
+      .guide-turtle-pane {
+        width: 100%;
+        max-width: none;
+      }
+
+      .topbar {
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      .topbar-left .brand-sub,
+      .project-mode,
+      .save-indicator {
+        display: none;
+      }
+
+      .brand-title {
+        font-size: 14px;
+      }
+
+      .project-title {
+        font-size: 14px;
+      }
+
+      .topbar-right {
+        width: 100%;
+      }
+
+      .topbar-right .top-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .btn {
+        min-height: 42px;
+      }
+
+      .btn.small {
+        min-height: 40px;
+      }
+
+      .workspace,
+      .workspace.console-right,
+      .workspace.console-right.no-turtle,
+      .workspace.no-turtle {
+        display: block;
+        min-height: 0;
+        gap: 10px;
+        padding: 8px 0;
+      }
+
+      .workspace .sidebar,
+      .workspace .editor-pane,
+      .workspace .console-pane,
+      .workspace .turtle-pane {
+        width: 100%;
+        margin-bottom: 10px;
+        min-height: 320px;
+      }
+
+      .workspace .sidebar {
+        min-height: 0;
+      }
+
+      .workspace .turtle-pane {
+        min-height: 520px;
+      }
+
+      .turtle-host {
+        padding: 10px;
+        overflow: hidden;
+      }
+
+      .turtle-canvas {
+        width: min(100%, 400px);
+        height: auto;
+        aspect-ratio: 1 / 1;
+      }
+
+      .panel-actions-files {
+        grid-template-columns: 1fr;
+        justify-content: stretch;
+        width: 100%;
+      }
+
+      .panel-actions-files .btn.small {
+        width: 100%;
+        white-space: normal;
+      }
+
+      .editor-controls #guide-hotkeys-btn,
+      .editor-controls #sandbox-hotkeys-btn,
+      #guide-console-layout-toggle,
+      #sandbox-console-layout-toggle {
+        display: none;
+      }
+
+      .console-input-row {
+        flex-direction: column;
+      }
+
+      .console-input-row .btn.small {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #sandbox-ide {
+        padding: 0;
+      }
+
+      #sandbox-workspace {
+        display: block;
+        overflow: hidden;
+        padding: 0;
+      }
+
+      #sandbox-workspace>.sidebar,
+      #sandbox-workspace>.editor-pane,
+      #sandbox-workspace>.console-pane,
+      #sandbox-workspace>.turtle-pane {
+        margin: 0 0 10px;
+        min-height: 430px;
+      }
+
+      .sandbox-mobile-nav {
+        display: grid;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="ambient"></div>
+  <div class="noise"></div>
+  <div id="toast-region" class="toasts"></div>
+  <div id="page-top"></div>
+  <div id="floating-toc" class="floating-toc">
+    <button id="scroll-top-btn" class="floating-toc-button" type="button" aria-label="Наверх">Вверх</button>
+  </div>
+
+  <div id="guide-restart-screen" class="restart-screen hidden">Ну я же предупреждал...</div>
+  <div id="sandbox-restart-screen" class="restart-screen hidden">Ну я же предупреждал...</div>
+
+  <header class="guide-header">
+    <div class="guide-content">
+      <div class="guide-hero">
+        <div>
+          <div class="brand" aria-label="МШПайтон.Онлайн">
+            <div class="logo"><img data-logo alt="" /></div>
+            <div>
+              <div class="brand-title">МШПайтон.Онлайн</div>
+              <div class="brand-sub">Web IDE Python</div>
+            </div>
+          </div>
+          <h1>Руководство по МШПайтон.Онлайн</h1>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="guide-root" class="guide-content">
+    <section class="guide-section">
+      <h2>Содержание</h2>
+      <ul class="toc">
+        <li><a href="#Как-начать-работу">Как начать работу</a></li>
+        <li>
+          <a href="#Обзор-интерфейса-IDE">Обзор интерфейса МШПайтон.Онлайн</a>
+          <ul>
+            <li><a href="#Шапка-сайта">Шапка сайта</a></li>
+            <li><a href="#Меню-Модули">Модули</a></li>
+            <li><a href="#Редактор-кода">Редактор кода</a></li>
+            <li><a href="#Консоль-ввода-вывода">Консоль ввода-вывода</a></li>
+            <li><a href="#Окно-Черепашки">Окно Черепашки</a></li>
+            <li><a href="#Кнопка-перезапуск">Кнопка «Перезапуск IDE»</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#Как-решать-задачи">Как решать задачи?</a>
+          <ul>
+            <li><a href="#Как-решать">Как решать</a></li>
+            <li><a href="#Решение-консольной-задачи">Решение консольной задачи</a></li>
+            <li><a href="#Решение-задачи-с-Черепашкой">Решение задачи с Черепашкой</a></li>
+            <li><a href="#Решение-задачи-с-дополнительными-модулями">Решение задачи с дополнительными модулями</a></li>
+            <li><a href="#Как-отправить-ссылку-с-решением">Как отправить ссылку с решением</a></li>
+          </ul>
+        </li>
+        <li><a href="#Песочница">Песочница</a></li>
+      </ul>
+    </section>
+
+    <section id="Как-начать-работу" class="guide-section">
+      <h2>Как начать работу</h2>
+      <p>Для того чтобы начать работу в среде МШПайтон.Онлайн, достаточно перейти по ссылке
+        <a href="https://files.informatics.ru/website/MSHPython/index.html" target="_blank" rel="noopener noreferrer">
+          https://files.informatics.ru/website/MSHPython/index.html
+        </a>
+      </p>
+
+      <div class="step-list">
+        <div class="step-card">
+          <strong>1. Нажми кнопку «Новый проект»</strong>
+          <button id="guide-new-project" class="btn primary">Новый проект</button>
+        </div>
+
+      </div>
+
+      <p><strong>Также стоит обратить внимание на:</strong></p>
+      <div class="label-grid">
+        <div class="label-item">Список проектов на устройстве</div>
+        <div>
+          <div id="guide-recent-list" class="recent-list">
+              <div class="recent-card">
+              <div class="recent-title">Алгоритмы</div>
+              <small>Обновлено: 29.01.2026</small>
+              <div class="recent-actions-row">
+                <button class="btn recent-open" data-project="Алгоритмы">Открыть</button>
+                <button class="btn square danger" title="Удалить">🗑</button>
+              </div>
+            </div>
+            <div class="recent-card">
+              <div class="recent-title">Черепашка</div>
+              <small>Обновлено: 28.01.2026</small>
+              <div class="recent-actions-row">
+                <button class="btn recent-open" data-project="Черепашка">Открыть</button>
+                <button class="btn square danger" title="Удалить">🗑</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="label-item">Кнопку «Очистить список»</div>
+        <div>
+          <button id="guide-clear-recent" class="btn ghost">Очистить список</button>
+          <div id="guide-empty-note" class="feedback hidden">Пока нет проектов</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="Обзор-интерфейса-IDE" class="guide-section">
+      <h2>Обзор интерфейса МШПайтон.Онлайн</h2>
+      <p>Начнём по порядку. Ниже ты найдёшь те же элементы, что можно встретить в МШПайтон.Онлайн. Попробуй нажать
+        каждую кнопку, чтобы понять, что она делает!</p>
+
+      <details class="collapsible" open>
+        <summary id="Шапка-сайта">
+          <h3>Шапка сайта</h3>
+        </summary>
+        <div class="collapsible-body">
+          <p>В шапке сайта есть возможность:</p>
+          <div class="label-grid">
+            <div class="label-item">Вернуться на главную</div>
+            <div class="topbar">
+              <div class="topbar-left">
+                <a id="guide-home-link" class="brand brand-link" href="javascript:void(0)">
+                  <div class="logo"><img data-logo alt="" /></div>
+                  <div>
+                    <div class="brand-title">МШПайтон.Онлайн</div>
+                    <div class="brand-sub">Web IDE Python</div>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            <div class="label-item">Переименовать проект</div>
+            <div class="topbar">
+              <div class="topbar-center">
+                <div class="project-meta">
+                  <div class="project-title-row">
+                    <div id="guide-project-title" class="project-title">Без названия</div>
+                    <button id="guide-rename-btn" class="btn-icon" title="Переименовать проект">&#9998;</button>
+                  </div>
+                  <div class="project-mode">Проект</div>
+                </div>
+                <div class="save-indicator">Сохранено</div>
+              </div>
+            </div>
+
+            <div class="label-item">Поделиться ссылкой на проект</div>
+            <div class="topbar">
+              <div class="topbar-right">
+                <div class="top-actions">
+                  <button id="guide-share-btn" class="btn ghost">Поделиться ссылкой</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="label-item">Экспортировать файлы проекта</div>
+            <div class="topbar">
+              <div class="topbar-right">
+                <div class="top-actions">
+                  <button id="guide-export-btn" class="btn ghost">Экспорт файлов</button>
+                </div>
+              </div>
+            </div>
+            <div class="label-item">Импортировать файлы проекта</div>
+            <div class="topbar">
+              <div class="topbar-right">
+                <div class="top-actions">
+                  <button id="guide-import-btn" class="btn ghost" title="Импорт файлов">Импорт файлов</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible" open>
+        <summary id="Меню-Модули">
+          <h3>Модули</h3>
+        </summary>
+        <div class="collapsible-body">
+          <p>Меню «Модули» позволяет:</p>
+          <div class="label-grid">
+            <div class="label-stack">
+              <div class="label-item">Добавить модуль в проект</div>
+              <div class="label-item">Переименовать выбранный модуль</div>
+              <div class="label-item">Дублировать выбранный модуль</div>
+              <div class="label-item">Удалить выбранный модуль</div>
+            </div>
+            <div class="panel guide-module-panel" id="guide-modules-panel">
+              <div class="panel-header">
+                <div class="panel-title">Модули</div>
+                <div class="panel-actions panel-actions-files guide-actions-grid">
+                  <button id="guide-file-create" class="btn small">+</button>
+                  <button id="guide-file-rename" class="btn small">Переименовать</button>
+                  <button id="guide-file-duplicate" class="btn small">Дублировать</button>
+                  <button id="guide-file-delete" class="btn small danger">Удалить</button>
+                </div>
+              </div>
+              <div class="file-list-label">Переключиться между модулями проекта</div>
+              <div class="file-list" id="guide-file-list"></div>
+            </div>
+          </div>
+          <p class="main-note"><em>Обрати внимание: модуль main.py является обязательным для всех проектов. Его нельзя
+              удалить или переименовать.</em></p>
+        </div>
+      </details>
+
+      <details class="collapsible" open>
+        <summary id="Редактор-кода">
+          <h3>Редактор кода</h3>
+        </summary>
+        <div class="collapsible-body">
+          <p>В нём ты можешь:</p>
+          <div class="label-grid">
+            <div class="label-stack">
+              <div class="label-item">Запустить main.py (независимо от того, какой модуль сейчас открыт)</div>
+              <div class="label-item">Остановить выполнение программы</div>
+              <div class="label-item">Переключиться между модулями</div>
+              <div class="label-item">Посмотреть список горячих клавиш</div>
+              <div class="label-item">Написать код программы</div>
+            </div>
+            <div>
+              <div class="editor-pane guide-editor-pane">
+                <div class="editor-toolbar">
+                  <div class="editor-actions">
+                    <button id="guide-run-btn" class="btn primary">Запуск main.py</button>
+                    <button id="guide-stop-btn" class="btn danger">Стоп</button>
+                    <div class="run-status">Ожидание</div>
+                  </div>
+                  <div class="editor-controls">
+                    <button id="guide-hotkeys-btn" class="btn ghost tiny">Горячие клавиши</button>
+                  </div>
+                </div>
+                <div id="guide-tabs" class="tabs"></div>
+                <div class="editor-wrap">
+                  <div id="guide-line-numbers" class="line-numbers" aria-hidden="true"></div>
+                  <div class="editor-stack">
+                    <pre id="guide-editor-highlight" class="editor-highlight" aria-hidden="true"></pre>
+                    <textarea id="guide-editor" class="editor" spellcheck="false"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible" open>
+        <summary id="Консоль-ввода-вывода">
+          <h3>Консоль ввода-вывода</h3>
+        </summary>
+        <div class="collapsible-body">
+          <p>Консоль ввода-вывода позволяет:</p>
+          <div class="label-grid single-flow">
+            <div class="label-stack">
+              <div class="label-item">Просматривать результаты работы функции print, а также работы самой программы
+              </div>
+              <div class="label-item">Вводить данные по одной или несколько строк в отдельное поле</div>
+              <div class="label-item">Очищать консоль</div>
+              <div class="label-item">Менять положение консоли</div>
+            </div>
+            <div class="console-pane guide-console-pane">
+              <div class="panel-header">
+                <div class="panel-title">Консоль</div>
+                <div class="panel-actions">
+                  <button id="guide-clear-btn" class="btn small ghost">Очистить консоль</button>
+                  <button id="guide-console-layout-toggle" class="btn small ghost">Консоль справа</button>
+                </div>
+              </div>
+              <pre id="guide-console-output" class="console-output"></pre>
+              <div class="console-input-row">
+                <textarea id="guide-console-input" class="console-input"
+                  placeholder="Введи input и нажми Enter (Shift+Enter для новой строки)"></textarea>
+                <button id="guide-console-send" class="btn small">Отправить</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible" open>
+        <summary id="Окно-Черепашки">
+          <h3>Окно Черепашки</h3>
+        </summary>
+        <div class="collapsible-body">
+          <div class="label-grid single-flow">
+            <div class="label-stack">
+              <div class="label-item">Окно Черепашки появляется в момент, когда в коде используется библиотека turtle.
+                В нём будет показан результат выполнения программы Черепашки.</div>
+              <div class="label-item">Выглядит оно примерно так:</div>
+            </div>
+            <div class="turtle-pane guide-turtle-pane">
+              <div class="panel-header turtle-header">
+                <div class="panel-title">Черепаха</div>
+                <div class="turtle-controls">
+                  <label class="turtle-speed hidden" for="guide-turtle-speed">
+                    <span id="guide-turtle-speed-label">Черепаха: Супер</span>
+                    <input id="guide-turtle-speed" type="range" min="0" max="2" step="1" value="2" />
+                  </label>
+                  <button id="guide-turtle-clear" class="btn small">Очистить</button>
+                </div>
+              </div>
+              <div class="turtle-host">
+                <div class="turtle-canvas">
+                  <div id="guide-turtle-drawing">
+                    <svg viewBox="0 0 200 200" width="200" height="200" aria-label="Смайлик" role="img">
+                      <circle cx="100" cy="100" r="70" fill="#ffdf6b" stroke="#f0c940" stroke-width="6" />
+                      <circle cx="75" cy="85" r="8" fill="#0f1f3a" />
+                      <circle cx="125" cy="85" r="8" fill="#0f1f3a" />
+                      <path d="M65 115 Q100 145 135 115" stroke="#0f1f3a" stroke-width="8" fill="none"
+                        stroke-linecap="round" />
+                    </svg>
+                  </div>
+                  <div id="guide-turtle-countdown" class="turtle-countdown">3</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapsible" open>
+        <summary id="Кнопка-перезапуск">
+          <h3>Кнопка «Перезапуск IDE»</h3>
+        </summary>
+        <div class="collapsible-body">
+          <div class="label-grid">
+            <div class="label-stack">
+              <div class="label-item">
+                <div>Если нужно полностью перезапустить МШПайтон.Онлайн, используй эту кнопку.</div>
+                <div class="important-note">ВАЖНО!</div>
+                <div>Это действие сотрёт все сохранённые в МШПайтон.Онлайн проекты!</div>
+              </div>
+            </div>
+            <div>
+              <button id="guide-restart-btn" class="btn ghost topbar-restart">Перезапуск IDE</button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="Как-решать-задачи" class="guide-section">
+      <h2>Как решать задачи?</h2>
+
+      <details class="collapsible" open>
+        <summary id="Как-решать">
+          <h3>Как решать</h3>
+        </summary>
+        <div class="collapsible-body">
+      <p>Ниже ты можешь посмотреть, как решать задачи различного типа в МШПайтон.Онлайн.</p>
+          <p>Для того, чтобы отправить решение преподавателю, скопируй ссылку на своё решение с помощью вот такой
+            кнопки <button id="guide-share-btn-inline" class="btn ghost small" type="button"
+              aria-label="Поделиться ссылкой">Поделиться
+              ссылкой</button>, а затем отправь эту ссылку в задачу в Информатикс.</p>
+          <p>Если ты открыл(а) проект по ссылке, это временная копия. Нажми «Ремикс», чтобы сохранить её локально и
+            продолжить работу уже в своём проекте.</p>
+          <div class="topbar">
+            <div class="topbar-right">
+              <div class="snapshot-banner">Это временная копия открытого по ссылке проекта. Чтобы сохранить проект локально, нажми "Ремикс"</div>
+              <div class="top-actions">
+                <button id="guide-reset-btn" class="btn ghost snapshot-accent">Сброс</button>
+                <button id="guide-remix-btn" class="btn ghost snapshot-accent">Ремикс</button>
+              </div>
+            </div>
+          </div>
+          <div id="guide-reset-hint" class="feedback hidden">Сброс: вернуть временную копию к исходному состоянию снимка.</div>
+          <div id="guide-remix-hint" class="feedback hidden">Ремикс: локальная копия проекта создана.</div>
+        </div>
+      </details>
+
+      <div class="gif-accordion">
+        <details class="collapsible">
+          <summary id="Решение-консольной-задачи">
+            <h3>Решение консольной задачи</h3>
+          </summary>
+          <div class="collapsible-body">
+            <div class="gif-block">
+              <img src=""
+                data-src="https://lms.informatics.ru/media/ck_uploads/novakovich_id/2026/01/30/bc946e7f_%D0%A0%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%BA%D0%BE%D0%BD%D1%81%D0%BE%D0%BB%D1%8C%D0%BD%D0%BE%D0%B9%20%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8.gif"
+                alt="Решение консольной задачи" loading="lazy" />
+            </div>
+          </div>
+        </details>
+
+        <details class="collapsible">
+          <summary id="Решение-задачи-с-Черепашкой">
+            <h3>Решение задачи с Черепашкой</h3>
+          </summary>
+          <div class="collapsible-body">
+            <div class="gif-block">
+              <img src=""
+                data-src="https://lms.informatics.ru/media/ck_uploads/novakovich_id/2026/01/30/bceacfe9_%D0%A0%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8%20%D1%81%20%D0%A7%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D1%88%D0%BA%D0%BE%D0%B9.gif"
+                alt="Решение задачи с Черепашкой" loading="lazy" />
+            </div>
+          </div>
+        </details>
+
+        <details class="collapsible">
+          <summary id="Решение-задачи-с-дополнительными-модулями">
+            <h3>Решение задачи с дополнительными модулями</h3>
+          </summary>
+          <div class="collapsible-body">
+            <div class="gif-block">
+              <img src=""
+                data-src="https://lms.informatics.ru/media/ck_uploads/novakovich_id/2026/01/30/2ba2bd7b_%D0%A0%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8%20%D1%81%20%D0%B4%D0%BE%D0%BF%D0%BE%D0%BB%D0%BD%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%D0%BD%D1%8B%D0%BC%D0%B8%20%D0%BC%D0%BE%D0%B4%D1%83%D0%BB%D1%8F%D0%BC%D0%B8.gif"
+                alt="Решение задачи с дополнительными модулями" loading="lazy" />
+            </div>
+          </div>
+        </details>
+
+        <details class="collapsible">
+          <summary id="Как-отправить-ссылку-с-решением">
+            <h3>Как отправить ссылку с решением</h3>
+          </summary>
+          <div class="collapsible-body">
+            <div class="gif-block">
+              <img src=""
+                data-src="https://lms.informatics.ru/media/ck_uploads/novakovich_id/2026/01/30/5c4035b3_%D0%9A%D0%B0%D0%BA%20%D0%BE%D1%82%D0%BF%D1%80%D0%B0%D0%B2%D0%B8%D1%82%D1%8C%20%D1%81%D1%81%D1%8B%D0%BB%D0%BA%D1%83.gif"
+                alt="Как отправить ссылку с решением" loading="lazy" />
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="Песочница" class="guide-section">
+      <h2>Песочница</h2>
+      <p>Скорее переходи в <a class="btn primary inline"
+          href="https://files.informatics.ru/website/MSHPython/index.html" target="_blank"
+          rel="noopener noreferrer">МШПайтон.Онлайн</a> и создавай свои программы! Но если хочешь ещё подробнее
+        познакомиться с интерфейсом, можешь сделать это в «Песочнице».</p>
+      <button id="guide-sandbox-open" class="btn primary">Открыть песочницу</button>
+    </section>
+  </main>
+
+  <section id="sandbox" class="sandbox hidden">
+    <div class="sandbox-frame">
+      <div class="sandbox-toolbar">
+        <strong>Песочница МШПайтон.Онлайн</strong>
+        <button id="guide-sandbox-close" class="btn ghost">Вернуться в руководство</button>
+      </div>
+      <div id="sandbox-home" class="sandbox-view active">
+        <div class="sandbox-home-content">
+          <div class="step-list">
+            <div class="step-card">
+              <strong>1. Нажми кнопку «Новый проект»</strong>
+              <button id="sandbox-new-project" class="btn primary">Новый проект</button>
+            </div>
+
+          </div>
+
+          <p><strong>Также стоит обратить внимание на:</strong></p>
+          <div class="label-grid">
+            <div class="label-item">Список проектов на устройстве</div>
+            <div>
+              <div class="recent-list" id="sandbox-recent-list">
+                <div class="recent-card">
+                  <div class="recent-title">Проект 1</div>
+                  <small>Обновлено: 29.01.2026</small>
+                  <button class="btn" data-sandbox-open="Проект 1">Открыть</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="label-item">Кнопку «Очистить список»</div>
+            <div>
+              <button id="sandbox-clear-recent" class="btn ghost">Очистить список</button>
+              <div id="sandbox-empty-note" class="feedback hidden">Пока нет проектов</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="sandbox-ide" class="sandbox-view">
+        <div class="topbar">
+          <div class="topbar-left">
+            <a id="sandbox-home-link" class="brand brand-link" href="javascript:void(0)">
+              <div class="logo"><img data-logo alt="" /></div>
+              <div>
+                <div class="brand-title">МШПайтон.Онлайн</div>
+                <div class="brand-sub">Web IDE Python</div>
+              </div>
+            </a>
+          </div>
+          <div class="topbar-center">
+            <div class="project-meta">
+              <div class="project-title-row">
+                <div id="sandbox-project-title" class="project-title">Проект 1</div>
+                <button id="sandbox-rename-btn" class="btn-icon" title="Переименовать проект">&#9998;</button>
+              </div>
+              <div class="project-mode">Проект</div>
+            </div>
+            <div class="save-indicator">Сохранено</div>
+          </div>
+          <div class="topbar-right">
+            <div class="top-actions">
+              <button id="sandbox-share-btn" class="btn ghost">Поделиться ссылкой</button>
+              <button id="sandbox-export-btn" class="btn ghost">Экспорт файлов</button>
+              <button id="sandbox-import-btn" class="btn ghost" title="Импорт файлов">Импорт файлов</button>
+            </div>
+          </div>
+        </div>
+        <div id="sandbox-workspace" class="workspace">
+          <aside id="sandbox-sidebar-pane" class="sidebar">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">Модули</div>
+                <div class="panel-actions panel-actions-files">
+                  <button id="sandbox-file-create" class="btn small">+</button>
+                  <button id="sandbox-file-rename" class="btn small">Переименовать</button>
+                  <button id="sandbox-file-duplicate" class="btn small">Дублировать</button>
+                  <button id="sandbox-file-delete" class="btn small danger">Удалить</button>
+                </div>
+              </div>
+              <div id="sandbox-file-list" class="file-list"></div>
+            </div>
+          </aside>
+
+          <section id="sandbox-editor-pane" class="editor-pane">
+            <div class="editor-toolbar">
+              <div class="editor-actions">
+                <button id="sandbox-run-btn" class="btn primary">Запуск main.py</button>
+                <button id="sandbox-stop-btn" class="btn danger">Стоп</button>
+                <div class="run-status">Ожидание</div>
+              </div>
+              <div class="editor-controls">
+                <button id="sandbox-hotkeys-btn" class="btn ghost tiny">Горячие клавиши</button>
+              </div>
+            </div>
+            <div id="sandbox-tabs" class="tabs"></div>
+            <div class="editor-wrap">
+              <div id="sandbox-line-numbers" class="line-numbers" aria-hidden="true"></div>
+              <div class="editor-stack">
+                <pre id="sandbox-editor-highlight" class="editor-highlight" aria-hidden="true"></pre>
+                <textarea id="sandbox-editor" class="editor" spellcheck="false"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section id="sandbox-console-pane" class="console-pane">
+            <div class="panel-header">
+              <div class="panel-title">Консоль</div>
+              <div class="panel-actions">
+                <button id="sandbox-clear-btn" class="btn small ghost">Очистить консоль</button>
+                <button id="sandbox-console-layout-toggle" class="btn small ghost" aria-pressed="false">Консоль
+                  справа</button>
+              </div>
+            </div>
+            <pre id="sandbox-console-output" class="console-output"></pre>
+            <div class="console-input-row">
+              <textarea id="sandbox-console-input" class="console-input"
+                placeholder="Введи input и нажми Enter (Shift+Enter для новой строки)"></textarea>
+              <button id="sandbox-console-send" class="btn small">Отправить</button>
+            </div>
+          </section>
+
+          <section id="sandbox-turtle-pane" class="turtle-pane">
+            <div class="panel-header turtle-header">
+              <div class="panel-title">Черепаха</div>
+              <div class="turtle-controls">
+                <label class="turtle-speed hidden" for="sandbox-turtle-speed">
+                  <span id="sandbox-turtle-speed-label">Черепаха: Супер</span>
+                  <input id="sandbox-turtle-speed" type="range" min="0" max="2" step="1" value="2" />
+                </label>
+                <button id="sandbox-turtle-clear" class="btn small">Очистить</button>
+              </div>
+            </div>
+            <div class="turtle-host">
+              <div class="turtle-canvas">
+                <div id="sandbox-turtle-drawing">
+                  <svg viewBox="0 0 200 200" width="200" height="200" aria-label="Смайлик" role="img">
+                    <circle cx="100" cy="100" r="70" fill="#ffdf6b" stroke="#f0c940" stroke-width="6" />
+                    <circle cx="75" cy="85" r="8" fill="#0f1f3a" />
+                    <circle cx="125" cy="85" r="8" fill="#0f1f3a" />
+                    <path d="M65 115 Q100 145 135 115" stroke="#0f1f3a" stroke-width="8" fill="none"
+                      stroke-linecap="round" />
+                  </svg>
+                </div>
+                <div id="sandbox-turtle-countdown" class="turtle-countdown">3</div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <nav id="sandbox-mobile-nav" class="sandbox-mobile-nav" aria-label="Навигация песочницы">
+          <button type="button" class="sandbox-mobile-nav-btn" data-card="modules">Модули</button>
+          <button type="button" class="sandbox-mobile-nav-btn active" data-card="editor">Редактор</button>
+          <button type="button" class="sandbox-mobile-nav-btn" data-card="console">Консоль</button>
+          <button type="button" class="sandbox-mobile-nav-btn" data-card="turtle">Черепаха</button>
+        </nav>
+        <button id="sandbox-restart-btn" class="btn ghost topbar-restart">Перезапуск IDE</button>
+      </div>
+    </div>
+  </section>
+  <div id="guide-rename-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Переименовать проект</div>
+      <input id="guide-rename-input" class="modal-input" placeholder="Без названия" />
+      <div class="modal-actions">
+        <button id="guide-rename-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-rename-save" class="btn primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-share-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Ссылка на снимок</div>
+      <input id="guide-share-input" class="modal-input"
+        value="https://files.informatics.ru/website/MSHPython/index.html#/s/nnvbyagGtvMA?p=g.H4sIAAAAAAAACu1TwWrCQBD9lemcDKySjaZqIActFYVSpHpzPIS44kIySrIWinjol_QXevFS6D-kf1Q2scUWe2qPXdjD23nv7Rt2dodGm0RhgMVTcXh7LA7Fa_FSPF-gwKVOVI7BbIccpZaSRpobmwcUGK_ZKDYYoE4368yA0akiJl5EJoIQZsQAAO2mkG5LSNcX0uuIZld0XSGlrE49KaRsCV_agnTbQspOuX3vK_w1QbbFf6C_C0Q8t289GY4GUwihbUG_N7mGENyG63nEk3Hv6gh94pvRbQUuicfDuw-m7Fjhcp0Bg2awoxNUIeIVhBCvshpDHcprnKqwyTSbWrwSoHgREhIKWCbbfBVOs61yrJ-l6WVpEQIhERMebe2yg9rIE6U2NRvr6KuSEwn8JCi7-qbQDDVCYYMQ1gmd89Kq7U9trs7T-hWJuGrUIcb9XGAS5aYXG32vBjo5_Yn7d3zYbULAAwAA" />
+      <div class="modal-actions">
+        <button id="guide-share-close" class="btn ghost" data-modal-close>Закрыть</button>
+        <button id="guide-share-copy" class="btn primary">Скопировать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-export-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Экспорт проекта</div>
+      <div class="modal-actions">
+        <button id="guide-export-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-export-json" class="btn">JSON</button>
+        <button id="guide-export-zip" class="btn primary">ZIP</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-create-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Название проекта</div>
+      <p class="modal-help">Введи название проекта и нажми кнопку «Создать»</p>
+      <input id="guide-project-name" class="modal-input" placeholder="Название проекта" />
+      <div class="modal-actions">
+        <button id="guide-project-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-project-create" class="btn primary">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-file-create-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Создать модуль</div>
+      <input id="guide-file-create-input" class="modal-input" placeholder="module_1.py" />
+      <div class="modal-actions">
+        <button class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-file-create-save" class="btn primary">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-file-rename-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Переименовать модуль</div>
+      <input id="guide-file-rename-input" class="modal-input" placeholder="Без названия" />
+      <div class="modal-actions">
+        <button class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-file-rename-save" class="btn primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-hotkeys-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Горячие клавиши</div>
+      <ul class="hotkeys-list">
+        <li><strong>F8</strong> или <strong>Alt+R</strong> — запуск</li>
+        <li><strong>Alt+X</strong> — Остановить выполнение</li>
+        <li><strong>Alt+C</strong> — Очистить консоль</li>
+        <li><strong>Alt+1</strong> — Фокус на редактор кода</li>
+        <li><strong>Alt+2</strong> — Фокус на консоль (для input)</li>
+        <li><strong>Alt+3</strong> — Фокус на черепаху</li>
+        <li style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>Редактор
+            кода:</strong></li>
+        <li><strong>Tab</strong> — Отступ</li>
+        <li><strong>Alt+/</strong> — Комментировать строку</li>
+        <li><strong>Alt+↑</strong> — Переместить строку вверх</li>
+        <li><strong>Alt+↓</strong> — Переместить строку вниз</li>
+        <li><strong>Ctrl+D</strong> — Дублировать строку</li>
+        <li><strong>Ctrl+Shift+K</strong> — Удалить строку</li>
+        <li><strong>Ctrl+L</strong> — Выделить строку</li>
+      </ul>
+      <div class="modal-actions">
+        <button class="btn primary" data-modal-close>Ок</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="guide-restart-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Перезапуск IDE</div>
+      <div class="modal-actions">
+        <button id="guide-restart-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="guide-restart-confirm" class="btn danger">Перезапустить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-rename-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Переименовать проект</div>
+      <input id="sandbox-rename-input" class="modal-input" placeholder="Без названия" />
+      <div class="modal-actions">
+        <button id="sandbox-rename-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-rename-save" class="btn primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-share-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Ссылка на снимок</div>
+      <input id="sandbox-share-input" class="modal-input"
+        value="https://files.informatics.ru/website/MSHPython/index.html#/s/nnvbyagGtvMA?p=g.H4sIAAAAAAAACu1TwWrCQBD9lemcDKySjaZqIActFYVSpHpzPIS44kIySrIWinjol_QXevFS6D-kf1Q2scUWe2qPXdjD23nv7Rt2dodGm0RhgMVTcXh7LA7Fa_FSPF-gwKVOVI7BbIccpZaSRpobmwcUGK_ZKDYYoE4368yA0akiJl5EJoIQZsQAAO2mkG5LSNcX0uuIZld0XSGlrE49KaRsCV_agnTbQspOuX3vK_w1QbbFf6C_C0Q8t289GY4GUwihbUG_N7mGENyG63nEk3Hv6gh94pvRbQUuicfDuw-m7Fjhcp0Bg2awoxNUIeIVhBCvshpDHcprnKqwyTSbWrwSoHgREhIKWCbbfBVOs61yrJ-l6WVpEQIhERMebe2yg9rIE6U2NRvr6KuSEwn8JCi7-qbQDDVCYYMQ1gmd89Kq7U9trs7T-hWJuGrUIcb9XGAS5aYXG32vBjo5_Yn7d3zYbULAAwAA" />
+      <div class="modal-actions">
+        <button id="sandbox-share-close" class="btn ghost" data-modal-close>Закрыть</button>
+        <button id="sandbox-share-copy" class="btn primary">Скопировать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-export-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Экспорт проекта</div>
+      <div class="modal-actions">
+        <button id="sandbox-export-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-export-json" class="btn">JSON</button>
+        <button id="sandbox-export-zip" class="btn primary">ZIP</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-create-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Название проекта</div>
+      <p class="modal-help">Введи название проекта и нажми кнопку «Создать»</p>
+      <input id="sandbox-project-name" class="modal-input" placeholder="Название проекта" />
+      <div class="modal-actions">
+        <button id="sandbox-project-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-project-create" class="btn primary">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-file-create-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Создать модуль</div>
+      <input id="sandbox-file-create-input" class="modal-input" placeholder="module_1.py" />
+      <div class="modal-actions">
+        <button class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-file-create-save" class="btn primary">Создать</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-file-rename-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Переименовать модуль</div>
+      <input id="sandbox-file-rename-input" class="modal-input" placeholder="Без названия" />
+      <div class="modal-actions">
+        <button class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-file-rename-save" class="btn primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-hotkeys-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Горячие клавиши</div>
+      <ul class="hotkeys-list">
+        <li><strong>F8</strong> или <strong>Alt+R</strong> — запуск</li>
+        <li><strong>Alt+X</strong> — Остановить выполнение</li>
+        <li><strong>Alt+C</strong> — Очистить консоль</li>
+        <li><strong>Alt+1</strong> — Фокус на редактор кода</li>
+        <li><strong>Alt+2</strong> — Фокус на консоль (для input)</li>
+        <li><strong>Alt+3</strong> — Фокус на черепаху</li>
+        <li style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>Редактор
+            кода:</strong></li>
+        <li><strong>Tab</strong> — Отступ</li>
+        <li><strong>Alt+/</strong> — Комментировать строку</li>
+        <li><strong>Alt+↑</strong> — Переместить строку вверх</li>
+        <li><strong>Alt+↓</strong> — Переместить строку вниз</li>
+        <li><strong>Ctrl+D</strong> — Дублировать строку</li>
+        <li><strong>Ctrl+Shift+K</strong> — Удалить строку</li>
+        <li><strong>Ctrl+L</strong> — Выделить строку</li>
+      </ul>
+      <div class="modal-actions">
+        <button class="btn primary" data-modal-close>Ок</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandbox-restart-modal" class="modal hidden" data-modal>
+    <div class="modal-card">
+      <div class="modal-title">Перезапуск IDE</div>
+      <div class="modal-actions">
+        <button id="sandbox-restart-cancel" class="btn ghost" data-modal-close>Отмена</button>
+        <button id="sandbox-restart-confirm" class="btn danger">Перезапустить</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="page-footer">Если у тебя остались вопросы, обратись к своему преподавателю!</footer>
+  <script>
+    const LOGO_SRC = "data:image/webp;base64,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";
+
+    document.querySelectorAll("img[data-logo]").forEach((img) => {
+      img.src = LOGO_SRC;
+    });
+
+    const RESTART_TOP_KEY = "mshp.restartTop";
+    if (sessionStorage.getItem(RESTART_TOP_KEY) === "1") {
+      sessionStorage.removeItem(RESTART_TOP_KEY);
+      requestAnimationFrame(() => {
+        window.location.hash = "#page-top";
+        window.scrollTo({ top: 0, behavior: "auto" });
+      });
+    }
+
+    const toastRegion = document.getElementById("toast-region");
+    const lastPointer = {
+      x: Math.round(window.innerWidth / 2),
+      y: Math.round(window.innerHeight / 2)
+    };
+
+    function updatePointerPosition(event) {
+      if (event.touches && event.touches[0]) {
+        lastPointer.x = event.touches[0].clientX;
+        lastPointer.y = event.touches[0].clientY;
+        return;
+      }
+      if (typeof event.clientX === "number" && typeof event.clientY === "number") {
+        lastPointer.x = event.clientX;
+        lastPointer.y = event.clientY;
+      }
+    }
+
+    document.addEventListener("mousemove", updatePointerPosition, { passive: true });
+    document.addEventListener("mousedown", updatePointerPosition, { passive: true });
+    document.addEventListener("touchstart", updatePointerPosition, { passive: true });
+
+    function showToast(message) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.textContent = message;
+      toastRegion.appendChild(toast);
+      requestAnimationFrame(() => {
+        const rect = toast.getBoundingClientRect();
+        const offset = 16;
+        const left = Math.min(
+          Math.max(12, lastPointer.x + offset),
+          window.innerWidth - rect.width - 12
+        );
+        const top = Math.min(
+          Math.max(12, lastPointer.y - rect.height - offset),
+          window.innerHeight - rect.height - 12
+        );
+        toast.style.left = `${left}px`;
+        toast.style.top = `${top}px`;
+        toast.classList.add("show");
+      });
+      setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => {
+          toast.remove();
+        }, 200);
+      }, 2600);
+    }
+
+    const floatingToc = document.getElementById("floating-toc");
+    if (floatingToc) {
+      const floatingBtn = floatingToc.querySelector(".floating-toc-button");
+      if (floatingBtn) {
+        floatingBtn.addEventListener("click", () => {
+          window.location.hash = "#page-top";
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove("hidden");
+      }
+    }
+
+    function closeModal(modal) {
+      modal.classList.add("hidden");
+    }
+
+    document.querySelectorAll("[data-modal]").forEach((modal) => {
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+          closeModal(modal);
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-modal-close]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        const modal = event.target.closest("[data-modal]");
+        if (modal) {
+          closeModal(modal);
+        }
+      });
+    });
+
+    function safeCopy(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {
+          showToast("У тебя не получилось скопировать.");
+        });
+      }
+    }
+
+    function clearClientState() {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (error) {
+        // ignore
+      }
+      try {
+        document.cookie.split(";").forEach((cookie) => {
+          const eqPos = cookie.indexOf("=");
+          const name = (eqPos > -1 ? cookie.slice(0, eqPos) : cookie).trim();
+          if (name) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+          }
+        });
+      } catch (error) {
+        // ignore
+      }
+    }
+
+    function formatDate(date = new Date()) {
+      return date.toLocaleDateString("ru-RU");
+    }
+
+    function addRecentCard(listId, name, dataAttr, onOpen) {
+      const list = document.getElementById(listId);
+      if (!list) {
+        return;
+      }
+      const card = document.createElement("div");
+      card.className = "recent-card";
+      card.innerHTML = `
+        <div class="recent-title">${name}</div>
+        <small>Обновлено: ${formatDate()}</small>
+        <div class="recent-actions-row">
+          <button class="btn recent-open" data-${dataAttr}="${name}">Открыть</button>
+          <button class="btn square danger" title="Удалить">🗑</button>
+        </div>
+      `;
+      list.prepend(card);
+      const openButton = card.querySelector(`[data-${dataAttr}]`);
+      if (openButton && onOpen) {
+        openButton.addEventListener("click", onOpen);
+      }
+      const deleteButton = card.querySelector(".btn.square.danger");
+      if (deleteButton) {
+        deleteButton.addEventListener("click", () => {
+          card.remove();
+          const emptyNoteId = listId === "guide-recent-list" ? "guide-empty-note" : listId === "sandbox-recent-list" ? "sandbox-empty-note" : null;
+          if (emptyNoteId && !list.querySelector(".recent-card")) {
+            document.getElementById(emptyNoteId)?.classList.remove("hidden");
+          }
+          showToast(`Ты удалил(а) проект ${name}`);
+        });
+      }
+    }
+
+    // Guide: project creation
+    document.getElementById("guide-new-project").addEventListener("click", () => {
+      openModal("guide-create-modal");
+      const input = document.getElementById("guide-project-name");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    });
+
+    document.getElementById("guide-project-create").addEventListener("click", () => {
+      const input = document.getElementById("guide-project-name");
+      const name = input.value.trim() || input.placeholder;
+      input.value = "";
+      document.getElementById("guide-project-title").textContent = name;
+      addRecentCard("guide-recent-list", name, "project", () => {
+        showToast(`Ты открыл(а) проект ${name}`);
+      });
+      document.getElementById("guide-empty-note").classList.add("hidden");
+      showToast(`Ты создал(а) проект "${name}"`);
+      closeModal(document.getElementById("guide-create-modal"));
+    });
+
+    document.getElementById("guide-project-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) создание проекта");
+    });
+
+    document.querySelectorAll("#guide-recent-list [data-project]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        showToast(`Ты открыл(а) проект ${btn.dataset.project}`);
+      });
+    });
+    document.querySelectorAll("#guide-recent-list .btn.square.danger").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const card = btn.closest(".recent-card");
+        const title = card?.querySelector(".recent-title")?.textContent || "";
+        card?.remove();
+        if (!document.querySelector("#guide-recent-list .recent-card")) {
+          document.getElementById("guide-empty-note").classList.remove("hidden");
+        }
+        showToast(`Ты удалил(а) проект ${title}`.trim());
+      });
+    });
+
+    document.getElementById("guide-clear-recent").addEventListener("click", () => {
+      document.getElementById("guide-recent-list").innerHTML = "";
+      document.getElementById("guide-empty-note").classList.remove("hidden");
+    });
+
+    // Guide top actions
+    document.getElementById("guide-home-link").addEventListener("click", () => {
+      showToast("Так ты вернёшься на главную");
+    });
+
+    document.getElementById("guide-rename-btn").addEventListener("click", () => {
+      openModal("guide-rename-modal");
+    });
+
+    document.getElementById("guide-rename-save").addEventListener("click", () => {
+      const name = document.getElementById("guide-rename-input").value.trim() || "Без названия";
+      document.getElementById("guide-project-title").textContent = name;
+      showToast(`Ты переименовал(а) проект в ${name}`);
+      closeModal(document.getElementById("guide-rename-modal"));
+    });
+
+    document.getElementById("guide-rename-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) переименование проекта");
+    });
+
+    document.getElementById("guide-share-btn").addEventListener("click", () => {
+      openModal("guide-share-modal");
+    });
+    document.getElementById("guide-share-btn-inline").addEventListener("click", () => {
+      openModal("guide-share-modal");
+    });
+
+    document.getElementById("guide-share-copy").addEventListener("click", () => {
+      const link = document.getElementById("guide-share-input").value;
+      safeCopy(link);
+      showToast("Ты скопировал(а) ссылку.");
+      closeModal(document.getElementById("guide-share-modal"));
+    });
+
+    document.getElementById("guide-share-close").addEventListener("click", () => {
+      showToast("Ты отменил(а) действие");
+    });
+
+    document.getElementById("guide-export-btn").addEventListener("click", () => {
+      openModal("guide-export-modal");
+    });
+    document.getElementById("guide-import-btn").addEventListener("click", () => {
+      showToast("Импортировать файлы проекта");
+    });
+
+    document.getElementById("guide-export-zip").addEventListener("click", () => {
+      showToast("Ты скачал(а) файлы проекта в формате zip");
+      closeModal(document.getElementById("guide-export-modal"));
+    });
+
+    document.getElementById("guide-export-json").addEventListener("click", () => {
+      showToast("Ты скачал(а) файлы проекта в формате JSON");
+      closeModal(document.getElementById("guide-export-modal"));
+    });
+
+    document.getElementById("guide-export-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) скачивание файлов проекта");
+    });
+
+    // Modules manager
+    function initModulePanel(config) {
+      const list = document.getElementById(config.listId);
+      const tabsRoot = document.getElementById(config.tabsId);
+      const createBtn = document.getElementById(config.createBtnId);
+      const renameBtn = document.getElementById(config.renameBtnId);
+      const duplicateBtn = document.getElementById(config.duplicateBtnId);
+      const deleteBtn = document.getElementById(config.deleteBtnId);
+      const createModal = document.getElementById(config.createModalId);
+      const createInput = document.getElementById(config.createInputId);
+      const createSave = document.getElementById(config.createSaveId);
+      const renameModal = document.getElementById(config.renameModalId);
+      const renameInput = document.getElementById(config.renameInputId);
+      const renameSave = document.getElementById(config.renameSaveId);
+      const editorApi = config.editorApi;
+
+      const initialContent = config.initialContent || {};
+      let modules = config.initialModules.map((name) => ({
+        name,
+        content: initialContent[name] || ""
+      }));
+      let active = modules[0]?.name;
+
+      function getModule(name) {
+        return modules.find((module) => module.name === name);
+      }
+
+      function setActive(name, announce = true) {
+        if (!name) {
+          return;
+        }
+        active = name;
+        render();
+        const module = getModule(name);
+        if (module && editorApi) {
+          editorApi.setValue(module.content);
+        }
+        if (announce) {
+          showToast(`Ты открыл(а) модуль ${name}`);
+        }
+      }
+
+      function renderList() {
+        if (!list) {
+          return;
+        }
+        list.innerHTML = "";
+        modules.forEach((module) => {
+          const item = document.createElement("div");
+          item.className = "file-item" + (module.name === active ? " active" : "");
+          item.innerHTML = `<span>${module.name}</span>`;
+          item.addEventListener("click", () => setActive(module.name));
+          list.appendChild(item);
+        });
+      }
+
+      function renderTabs() {
+        if (!tabsRoot) {
+          return;
+        }
+        tabsRoot.innerHTML = "";
+        modules.forEach((module) => {
+          const tab = document.createElement("div");
+          tab.className = "tab" + (module.name === active ? " active" : "");
+          tab.dataset.module = module.name;
+          tab.textContent = module.name;
+          tab.addEventListener("click", () => setActive(module.name));
+          tabsRoot.appendChild(tab);
+        });
+      }
+
+      function render() {
+        renderList();
+        renderTabs();
+        const isMain = active === "main.py";
+        if (renameBtn) {
+          renameBtn.disabled = isMain;
+        }
+        if (deleteBtn) {
+          deleteBtn.disabled = isMain;
+        }
+      }
+
+      if (editorApi) {
+        editorApi.onChange((value) => {
+          const module = getModule(active);
+          if (module) {
+            module.content = value;
+          }
+        });
+      }
+
+      if (createBtn) {
+        createBtn.addEventListener("click", () => {
+          const nextName = `module_${modules.length + 1}.py`;
+          if (createInput) {
+            createInput.placeholder = nextName;
+            createInput.value = "";
+          }
+          openModal(createModal.id);
+        });
+      }
+      if (renameBtn) {
+        renameBtn.addEventListener("click", () => {
+          if (renameBtn.disabled) {
+            showToast("Ты не можешь переименовать main.py");
+            return;
+          }
+          openModal(renameModal.id);
+        });
+      }
+
+      if (duplicateBtn) {
+        duplicateBtn.addEventListener("click", () => {
+          const current = getModule(active);
+          if (!current) {
+            return;
+          }
+          const baseName = active.replace(/\.py$/i, "");
+          let copyName = `${baseName}_copy.py`;
+          let counter = 1;
+          while (modules.some((module) => module.name === copyName)) {
+            copyName = `${baseName}_copy${counter}.py`;
+            counter += 1;
+          }
+          modules.push({ name: copyName, content: current.content });
+          setActive(copyName, false);
+          showToast(`Ты продублировал(а) модуль ${copyName}`);
+        });
+      }
+
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+          if (deleteBtn.disabled) {
+            showToast("Ты не можешь удалить main.py");
+            return;
+          }
+          modules = modules.filter((module) => module.name !== active);
+          active = modules[0]?.name || "main.py";
+          render();
+          if (modules.length === 0) {
+            modules = [{ name: "main.py", content: "" }];
+          }
+          setActive(active || modules[0].name, false);
+          showToast("Ты удалил(а) модуль");
+        });
+      }
+
+      if (createSave) {
+        createSave.addEventListener("click", () => {
+          const name = createInput.value.trim() || `module_${modules.length + 1}.py`;
+          modules.push({ name, content: "" });
+          createInput.value = "";
+          setActive(name, false);
+          showToast(`Ты создал(а) модуль ${name}`);
+          closeModal(createModal);
+        });
+      }
+
+      if (renameSave) {
+        renameSave.addEventListener("click", () => {
+          if (active === "main.py") {
+            showToast("Ты не можешь переименовать main.py");
+            return;
+          }
+          const name = renameInput.value.trim() || active;
+          modules = modules.map((module) =>
+            module.name === active ? { ...module, name } : module
+          );
+          active = name;
+          renameInput.value = "";
+          render();
+          setActive(active, false);
+          showToast(`Ты переименовал(а) модуль в ${name}`);
+          closeModal(renameModal);
+        });
+      }
+
+      render();
+      setActive(active, false);
+    }
+
+
+    // Editor
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function highlightPython(text) {
+      let html = escapeHtml(text);
+      html = html.replace(/(#.*$)/gm, "<span class=\"token comment\">$1</span>");
+      html = html.replace(/\b(\d+)\b/g, "<span class=\"token number\">$1</span>");
+      html = html.replace(/\b(def|class|return|for|while|if|elif|else|import|from|as|break|continue|in|and|or|not)\b/g,
+        "<span class=\"token keyword\">$1</span>");
+      html = html.replace(/\b(print|input|range|len|str|int|float|list|dict|set|tuple)\b/g,
+        "<span class=\"token builtin\">$1</span>");
+      return html;
+    }
+
+    function initEditor(editorId, highlightId, numbersId) {
+      const editor = document.getElementById(editorId);
+      const highlight = document.getElementById(highlightId);
+      const numbers = document.getElementById(numbersId);
+      const listeners = [];
+
+      function update() {
+        const value = editor.value || "";
+        highlight.innerHTML = highlightPython(value);
+        const lineCount = value.split("\n").length;
+        numbers.textContent = Array.from({ length: lineCount }, (_, i) => i + 1).join("\n");
+      }
+
+      function syncScroll() {
+        highlight.scrollTop = editor.scrollTop;
+        highlight.scrollLeft = editor.scrollLeft;
+        numbers.scrollTop = editor.scrollTop;
+      }
+
+      editor.addEventListener("input", () => {
+        update();
+        listeners.forEach((fn) => fn(editor.value));
+      });
+      editor.addEventListener("scroll", syncScroll);
+
+      update();
+      syncScroll();
+
+      return {
+        setValue(value) {
+          editor.value = value || "";
+          update();
+          syncScroll();
+        },
+        onChange(fn) {
+          listeners.push(fn);
+        }
+      };
+    }
+
+    const guideEditor = initEditor("guide-editor", "guide-editor-highlight", "guide-line-numbers");
+    const sandboxEditor = initEditor("sandbox-editor", "sandbox-editor-highlight", "sandbox-line-numbers");
+
+    const guideModuleContent = {
+      "main.py": "def hello():\n    print(\"Hello, world!\")\n\nhello()\n"
+    };
+
+    const sandboxModuleContent = {
+      "main.py": "def hello():\n    print(\"Hello, world!\")\n\nhello()\n"
+    };
+
+    initModulePanel({
+      listId: "guide-file-list",
+      tabsId: "guide-tabs",
+      createBtnId: "guide-file-create",
+      renameBtnId: "guide-file-rename",
+      duplicateBtnId: "guide-file-duplicate",
+      deleteBtnId: "guide-file-delete",
+      createModalId: "guide-file-create-modal",
+      createInputId: "guide-file-create-input",
+      createSaveId: "guide-file-create-save",
+      renameModalId: "guide-file-rename-modal",
+      renameInputId: "guide-file-rename-input",
+      renameSaveId: "guide-file-rename-save",
+      editorApi: guideEditor,
+      initialContent: guideModuleContent,
+      initialModules: ["main.py"],
+    });
+
+    document.getElementById("guide-run-btn").addEventListener("click", () => {
+      showToast("Ты запустил(а) основной модуль программы");
+    });
+    document.getElementById("guide-stop-btn").addEventListener("click", () => showToast("Ты остановил(а) выполнение программы"));
+    document.getElementById("guide-hotkeys-btn").addEventListener("click", () => openModal("guide-hotkeys-modal"));
+
+    document.getElementById("sandbox-run-btn").addEventListener("click", () => {
+      showToast("Ты запустил(а) основной модуль программы");
+    });
+    document.getElementById("sandbox-stop-btn").addEventListener("click", () => showToast("Ты остановил(а) выполнение программы"));
+    document.getElementById("sandbox-hotkeys-btn").addEventListener("click", () => openModal("sandbox-hotkeys-modal"));
+
+    function initConsole(config) {
+      const output = document.getElementById(config.outputId);
+      const input = document.getElementById(config.inputId);
+      const send = document.getElementById(config.sendId);
+      const clear = document.getElementById(config.clearId);
+      const toggle = document.getElementById(config.toggleId);
+
+      send.addEventListener("click", () => {
+        const value = input.value.trim();
+        if (!value) {
+          return;
+        }
+        output.textContent += `\n${value}`;
+        input.value = "";
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        if (event.shiftKey) {
+          return;
+        }
+        event.preventDefault();
+        send.click();
+      });
+
+      clear.addEventListener("click", () => {
+        output.textContent = "";
+      });
+
+      toggle.addEventListener("click", () => {
+        if (config.onToggle) {
+          config.onToggle();
+          return;
+        }
+        showToast("С этой кнопкой ты изменишь компоновку консоли и редактора");
+      });
+    }
+
+    initConsole({
+      outputId: "guide-console-output",
+      inputId: "guide-console-input",
+      sendId: "guide-console-send",
+      clearId: "guide-clear-btn",
+      toggleId: "guide-console-layout-toggle",
+    });
+
+    const sandboxWorkspace = document.getElementById("sandbox-workspace");
+    const sandboxMobileNav = document.getElementById("sandbox-mobile-nav");
+    const sandboxMobileButtons = Array.from(document.querySelectorAll("#sandbox-mobile-nav .sandbox-mobile-nav-btn"));
+    const sandboxCards = {
+      modules: document.getElementById("sandbox-sidebar-pane"),
+      editor: document.getElementById("sandbox-editor-pane"),
+      console: document.getElementById("sandbox-console-pane"),
+      turtle: document.getElementById("sandbox-turtle-pane")
+    };
+    let sandboxActiveCard = "editor";
+
+    function isSandboxMobileViewport() {
+      return window.matchMedia("(max-width: 768px)").matches;
+    }
+
+    function setSandboxCard(card) {
+      if (!sandboxCards[card]) {
+        return;
+      }
+      sandboxActiveCard = card;
+      applySandboxResponsiveLayout();
+    }
+
+    function applySandboxResponsiveLayout() {
+      const mobile = isSandboxMobileViewport();
+      if (sandboxMobileNav) {
+        sandboxMobileNav.classList.toggle("hidden", !mobile);
+      }
+      Object.entries(sandboxCards).forEach(([key, element]) => {
+        if (!element) {
+          return;
+        }
+        element.classList.toggle("sandbox-card-hidden", mobile && key !== sandboxActiveCard);
+      });
+      sandboxMobileButtons.forEach((button) => {
+        const active = mobile && button.dataset.card === sandboxActiveCard;
+        button.classList.toggle("active", active);
+      });
+    }
+
+    sandboxMobileButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setSandboxCard(button.dataset.card);
+      });
+    });
+
+    window.addEventListener("resize", applySandboxResponsiveLayout);
+    function setSandboxConsoleLayout(right) {
+      if (!sandboxWorkspace) {
+        return;
+      }
+      const next = Boolean(right);
+      sandboxWorkspace.classList.toggle("console-right", next);
+      const toggle = document.getElementById("sandbox-console-layout-toggle");
+      if (toggle) {
+        toggle.textContent = next ? "Консоль снизу" : "Консоль справа";
+        toggle.setAttribute("aria-pressed", String(next));
+      }
+    }
+
+    initConsole({
+      outputId: "sandbox-console-output",
+      inputId: "sandbox-console-input",
+      sendId: "sandbox-console-send",
+      clearId: "sandbox-clear-btn",
+      toggleId: "sandbox-console-layout-toggle",
+      onToggle: () => setSandboxConsoleLayout(!sandboxWorkspace?.classList.contains("console-right")),
+    });
+
+    function initTurtle(clearId, drawingId, countdownId) {
+      const clearBtn = document.getElementById(clearId);
+      const drawing = document.getElementById(drawingId);
+      const countdown = document.getElementById(countdownId);
+      let countdownTimer = null;
+
+      clearBtn.addEventListener("click", () => {
+        if (countdownTimer) {
+          return;
+        }
+        drawing.classList.add("hidden");
+        let value = 3;
+        countdown.textContent = value;
+        countdown.classList.add("show");
+        countdownTimer = setInterval(() => {
+          value -= 1;
+          if (value === 0) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+            countdown.classList.remove("show");
+            drawing.classList.remove("hidden");
+          } else {
+            countdown.textContent = value;
+          }
+        }, 1000);
+      });
+    }
+
+    initTurtle("guide-turtle-clear", "guide-turtle-drawing", "guide-turtle-countdown");
+    initTurtle("sandbox-turtle-clear", "sandbox-turtle-drawing", "sandbox-turtle-countdown");
+
+    const guideResetBtn = document.getElementById("guide-reset-btn");
+    const guideResetHint = document.getElementById("guide-reset-hint");
+    const guideRemixHint = document.getElementById("guide-remix-hint");
+    if (guideResetBtn) {
+      guideResetBtn.addEventListener("click", () => {
+        showToast("Сброс: временная копия возвращена к исходному состоянию.");
+        if (guideResetHint) {
+          guideResetHint.classList.remove("hidden");
+        }
+        if (guideRemixHint) {
+          guideRemixHint.classList.add("hidden");
+        }
+      });
+    }
+
+    const guideRemixBtn = document.getElementById("guide-remix-btn");
+    if (guideRemixBtn) {
+      guideRemixBtn.addEventListener("click", () => {
+        showToast("Ремикс создан: проект сохранён локально.");
+        if (guideRemixHint) {
+          guideRemixHint.classList.remove("hidden");
+        }
+        if (guideResetHint) {
+          guideResetHint.classList.add("hidden");
+        }
+      });
+    }
+
+    document.getElementById("guide-restart-btn").addEventListener("click", () => openModal("guide-restart-modal"));
+
+    document.getElementById("guide-restart-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) перезапуск");
+    });
+
+    document.getElementById("guide-restart-confirm").addEventListener("click", () => {
+      closeModal(document.getElementById("guide-restart-modal"));
+      const screen = document.getElementById("guide-restart-screen");
+      screen.classList.remove("hidden");
+      setTimeout(() => {
+        clearClientState();
+        sessionStorage.setItem(RESTART_TOP_KEY, "1");
+        window.location.reload();
+      }, 1500);
+    });
+
+    // Sandbox routing
+    const sandbox = document.getElementById("sandbox");
+    const guideRoot = document.getElementById("guide-root");
+    const guideHeader = document.querySelector(".guide-header");
+    const pageFooter = document.querySelector(".page-footer");
+    const floatingTocRoot = document.getElementById("floating-toc");
+
+    function setGuideVisibility(isVisible) {
+      [guideHeader, guideRoot, pageFooter, floatingTocRoot].forEach((element) => {
+        if (!element) {
+          return;
+        }
+        element.classList.toggle("hidden", !isVisible);
+      });
+    }
+
+    document.getElementById("guide-sandbox-open").addEventListener("click", () => {
+      setGuideVisibility(false);
+      sandbox.classList.remove("hidden");
+      sandbox.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    document.getElementById("guide-sandbox-close").addEventListener("click", () => {
+      sandbox.classList.add("hidden");
+      setGuideVisibility(true);
+      (guideHeader || guideRoot).scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    const scrollTopBtn = document.getElementById("scroll-top-btn");
+    if (scrollTopBtn) {
+      scrollTopBtn.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+
+    function showSandboxView(viewId) {
+      document.querySelectorAll(".sandbox-view").forEach((view) => {
+        view.classList.toggle("active", view.id === viewId);
+      });
+      if (viewId === "sandbox-ide") {
+        applySandboxResponsiveLayout();
+      }
+    }
+
+    document.getElementById("sandbox-new-project").addEventListener("click", () => {
+      openModal("sandbox-create-modal");
+      const input = document.getElementById("sandbox-project-name");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    });
+
+    document.getElementById("sandbox-project-create").addEventListener("click", () => {
+      const input = document.getElementById("sandbox-project-name");
+      const name = input.value.trim() || input.placeholder;
+      input.value = "";
+      document.getElementById("sandbox-project-title").textContent = name;
+      addRecentCard("sandbox-recent-list", name, "sandbox-open", () => {
+        document.getElementById("sandbox-project-title").textContent = name;
+        showSandboxView("sandbox-ide");
+        showToast(`Ты открыл(а) проект ${name}`);
+      });
+      document.getElementById("sandbox-empty-note").classList.add("hidden");
+      showToast(`Ты создал(а) проект "${name}"`);
+      closeModal(document.getElementById("sandbox-create-modal"));
+      showSandboxView("sandbox-ide");
+    });
+
+    document.getElementById("sandbox-project-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) создание проекта");
+    });
+
+    document.querySelectorAll("#sandbox-recent-list [data-sandbox-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.getElementById("sandbox-project-title").textContent = btn.dataset.sandboxOpen;
+        showSandboxView("sandbox-ide");
+        showToast(`Ты открыл(а) проект ${btn.dataset.sandboxOpen}`);
+      });
+    });
+    document.querySelectorAll("#sandbox-recent-list .btn.square.danger").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const card = btn.closest(".recent-card");
+        const title = card?.querySelector(".recent-title")?.textContent || "";
+        card?.remove();
+        if (!document.querySelector("#sandbox-recent-list .recent-card")) {
+          document.getElementById("sandbox-empty-note").classList.remove("hidden");
+        }
+        showToast(`Ты удалил(а) проект ${title}`.trim());
+      });
+    });
+
+    document.getElementById("sandbox-clear-recent").addEventListener("click", () => {
+      document.getElementById("sandbox-recent-list").innerHTML = "";
+      document.getElementById("sandbox-empty-note").classList.remove("hidden");
+    });
+
+    document.getElementById("sandbox-home-link").addEventListener("click", () => {
+      showToast("Так ты вернёшься на главную");
+      showSandboxView("sandbox-home");
+    });
+
+    document.getElementById("sandbox-rename-btn").addEventListener("click", () => openModal("sandbox-rename-modal"));
+    document.getElementById("sandbox-rename-save").addEventListener("click", () => {
+      const name = document.getElementById("sandbox-rename-input").value.trim() || "Без названия";
+      document.getElementById("sandbox-project-title").textContent = name;
+      showToast(`Ты переименовал(а) проект в ${name}`);
+      closeModal(document.getElementById("sandbox-rename-modal"));
+    });
+    document.getElementById("sandbox-rename-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) переименование проекта");
+    });
+
+    document.getElementById("sandbox-share-btn").addEventListener("click", () => openModal("sandbox-share-modal"));
+    document.getElementById("sandbox-share-copy").addEventListener("click", () => {
+      const link = document.getElementById("sandbox-share-input").value;
+      safeCopy(link);
+      showToast("Ты скопировал(а) ссылку.");
+      closeModal(document.getElementById("sandbox-share-modal"));
+    });
+    document.getElementById("sandbox-share-close").addEventListener("click", () => {
+      showToast("Ты отменил(а) действие");
+    });
+
+    document.getElementById("sandbox-export-btn").addEventListener("click", () => openModal("sandbox-export-modal"));
+    document.getElementById("sandbox-import-btn").addEventListener("click", () => {
+      showToast("Импортировать файлы проекта");
+    });
+    document.getElementById("sandbox-export-zip").addEventListener("click", () => {
+      showToast("Ты скачал(а) файлы проекта в формате zip");
+      closeModal(document.getElementById("sandbox-export-modal"));
+    });
+    document.getElementById("sandbox-export-json").addEventListener("click", () => {
+      showToast("Ты скачал(а) файлы проекта в формате JSON");
+      closeModal(document.getElementById("sandbox-export-modal"));
+    });
+    document.getElementById("sandbox-export-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) скачивание файлов проекта");
+    });
+
+    document.getElementById("sandbox-restart-btn").addEventListener("click", () => openModal("sandbox-restart-modal"));
+    document.getElementById("sandbox-restart-cancel").addEventListener("click", () => {
+      showToast("Ты отменил(а) перезапуск");
+    });
+    document.getElementById("sandbox-restart-confirm").addEventListener("click", () => {
+      closeModal(document.getElementById("sandbox-restart-modal"));
+      const screen = document.getElementById("sandbox-restart-screen");
+      screen.classList.remove("hidden");
+      setTimeout(() => {
+        clearClientState();
+        sessionStorage.setItem(RESTART_TOP_KEY, "1");
+        window.location.reload();
+      }, 1500);
+    });
+
+    initModulePanel({
+      listId: "sandbox-file-list",
+      tabsId: "sandbox-tabs",
+      createBtnId: "sandbox-file-create",
+      renameBtnId: "sandbox-file-rename",
+      duplicateBtnId: "sandbox-file-duplicate",
+      deleteBtnId: "sandbox-file-delete",
+      createModalId: "sandbox-file-create-modal",
+      createInputId: "sandbox-file-create-input",
+      createSaveId: "sandbox-file-create-save",
+      renameModalId: "sandbox-file-rename-modal",
+      renameInputId: "sandbox-file-rename-input",
+      renameSaveId: "sandbox-file-rename-save",
+      editorApi: sandboxEditor,
+      initialContent: sandboxModuleContent,
+      initialModules: ["main.py"],
+    });
+
+    function initGifAccordion() {
+      const items = document.querySelectorAll(".gif-accordion details.collapsible");
+      items.forEach((item) => {
+        const img = item.querySelector("img[data-src]");
+        if (!img) {
+          return;
+        }
+        const sync = () => {
+          if (item.open) {
+            img.src = "";
+            img.src = img.dataset.src;
+          } else {
+            img.src = "";
+          }
+        };
+        item.addEventListener("toggle", sync);
+        sync();
+      });
+    }
+
+    initGifAccordion();
+  </script>
+</body>
+
+</html>

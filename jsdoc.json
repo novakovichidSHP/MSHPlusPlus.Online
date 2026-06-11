@@ -1,0 +1,11 @@
+{
+    "source": {
+        "include": [
+            "assets/skulpt-app.js"
+        ]
+    },
+    "opts": {
+        "destination": "./docs/api",
+        "readme": "./README.md"
+    }
+}

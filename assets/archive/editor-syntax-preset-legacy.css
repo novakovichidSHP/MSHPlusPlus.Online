@@ -1,0 +1,23 @@
+/* Archived legacy syntax preset (pre Trinket-like palette). */
+
+.editor-highlight .token.keyword {
+  color: #1c6bff;
+  font-weight: 400;
+}
+
+.editor-highlight .token.string {
+  color: #1b7a4b;
+}
+
+.editor-highlight .token.comment {
+  color: #7a889f;
+  font-style: italic;
+}
+
+.editor-highlight .token.number {
+  color: #c25727;
+}
+
+.editor-highlight .token.builtin {
+  color: #0f7fa6;
+}
