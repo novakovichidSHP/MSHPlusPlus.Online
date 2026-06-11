@@ -18,7 +18,7 @@ import {
 } from "@codemirror/language";
 import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
-import { python } from "@codemirror/lang-python";
+import { cpp } from "@codemirror/lang-cpp";
 import { tags } from "@lezer/highlight";
 
 const DEFAULT_TAB_SIZE = 4;
@@ -163,7 +163,7 @@ export function createCodeMirrorEditor({
     crosshairCursor(),
     highlightActiveLine(),
     syntaxHighlighting(legacyHighlightStyle, { fallback: true }),
-    languageCompartment.of(python()),
+    languageCompartment.of(cpp()),
     tabSizeCompartment.of(getTabExtension(settingsState.tabSize)),
     wrapCompartment.of(getWrapExtension(settingsState.wordWrap)),
     readOnlyCompartment.of(getReadOnlyExtension(readOnly)),
