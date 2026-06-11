@@ -11,6 +11,13 @@ import {
   normalizeEditorMode,
   resolveEditorMode
 } from "./utils/editor-mode-utils.js";
+import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js";
+
+// Движок C++ (emception) — занимает место Skulpt. Инициализируется в initCppRuntime().
+// baseUrl относителен расположению cpp-runtime.js (assets/cpp-runtime/) → ../../toolchain/
+// разрешается в <корень-сайта>/toolchain/ независимо от того, где смонтирован сайт.
+let cppEngine = null;
+const CPP_TOOLCHAIN_BASE = "../../toolchain/";
 
 const CONFIG = {
   RUN_TIMEOUT_MS: 60000,
@@ -22,7 +29,7 @@ const CONFIG = {
   WORD_WRAP: false,
   ENABLE_TURTLE_IMAGE_COMPAT_PATCH: false
 };
-const MAIN_FILE = "main.py";
+const MAIN_FILE = "main.cpp";
 const EDITOR_FONT_MIN = 12;
 const EDITOR_FONT_MAX = 20;
 const EDITOR_FONT_STEP = 1;
@@ -85,6 +92,8 @@ const supportsPassiveEvents = (() => {
 const touchEventOptions = supportsPassiveEvents ? { passive: false } : false;
 const RUN_STATUS_LABELS = {
   idle: "Ожидание",
+  loading: "Загрузка компилятора…",
+  compiling: "Компиляция…",
   running: "Выполняется",
   done: "Готово",
   error: "Ошибка",
@@ -1537,7 +1546,7 @@ async function renameFile() {
     return;
   }
   if (state.activeFile === MAIN_FILE) {
-    showToast("main.py нельзя переименовать.");
+    showToast("main.cpp нельзя переименовать.");
     return;
   }
   const nextName = await promptModal({
@@ -1610,7 +1619,7 @@ async function deleteFile() {
     return;
   }
   if (name === MAIN_FILE) {
-    showToast("main.py нельзя удалить.");
+    showToast("main.cpp нельзя удалить.");
     return;
   }
   const ok = await confirmModal({
@@ -3179,14 +3188,28 @@ function logRuntimeSourceDiagnostics(meta) {
 }
 
 function initSkulpt() {
-  if (typeof window === "undefined" || typeof window.Sk === "undefined") {
-    state.runtimeBlocked = true;
-    setGuardMessage("Среда не загружена", "Проверьте подключение библиотек.");
-    return;
-  }
-  state.runtimeReady = true;
-  updateRunStatus("idle");
+  // Старт C++-движка (emception). Тулчейн ~25 МБ грузится асинхронно — до готовности
+  // запуск заблокирован, статус «Загрузка компилятора…». UX/вёрстка не меняются.
+  cppEngine = createCppRuntime({
+    baseUrl: CPP_TOOLCHAIN_BASE,
+    runTimeoutMs: CONFIG.RUN_TIMEOUT_MS,
+    maxOutputBytes: CONFIG.MAX_OUTPUT_BYTES,
+    maxFiles: CONFIG.MAX_FILES,
+    maxSingleFileBytes: CONFIG.MAX_SINGLE_FILE_BYTES,
+    maxTotalTextBytes: CONFIG.MAX_TOTAL_TEXT_BYTES
+  });
+  state.runtimeReady = false;
+  state.runtimeBlocked = false;
+  updateRunStatus("loading");
   showGuard(false);
+  cppEngine.init().then(() => {
+    state.runtimeReady = true;
+    updateRunStatus("idle");
+  }).catch((error) => {
+    state.runtimeBlocked = true;
+    setGuardMessage("Компилятор не загрузился", String((error && error.message) || error));
+    showGuard(true);
+  });
 }
 
 
@@ -3689,117 +3712,121 @@ function updateTurtleVisibilityForRun(files) {
  * @returns {Promise<void>}
  */
 async function runActiveFile() {
-  if (state.runtimeBlocked) {
-    showGuard(true);
-    return;
-  }
-  if (!state.runtimeReady) {
+  if (state.runtimeBlocked || !state.runtimeReady) {
     showGuard(true);
     return;
   }
 
-  // cancelStepSession(); // Removed
   clearEditorLineHighlight();
   const entryName = MAIN_FILE;
-
   const file = getFileByName(entryName);
   if (!file) {
-    showToast("Нет main.py.");
+    showToast("Нет main.cpp.");
     return;
   }
   if (state.activeFile !== MAIN_FILE) {
     setActiveFile(MAIN_FILE);
   }
   clearEditorLineHighlight();
-  const files = getCurrentFiles();
-  const usesTurtle = updateTurtleVisibilityForRun(files);
+
+  // Все .cpp/.h/.hpp проекта идут в компиляцию; точка входа — main.cpp.
+  const files = getCurrentFiles().map((f) => ({
+    name: f.name,
+    content: String(f.content ?? "")
+  }));
+
   if (isMobileViewport()) {
-    setUiCard(usesTurtle ? "turtle" : "console");
+    setUiCard("console");
   }
   clearConsole();
-  if (els.turtleCanvas) {
-    els.turtleCanvas.innerHTML = "";
-  }
-  updateRunStatus("running");
 
-  state.stdinQueue = [];
-  setConsoleInputWaiting(false);
+  // batch stdin: то, что пользователь заранее ввёл в консоль, отдаём как std::cin.
+  const stdinBuffer = state.stdinQueue.length ? state.stdinQueue.join("\n") + "\n" : "";
   state.stdinResolver = null;
+  setConsoleInputWaiting(false);
 
-  const assets = state.mode === "project" ? await loadAssets() : [];
+  const runToken = state.runToken + 1;
+  state.runToken = runToken;
+  els.stopBtn.disabled = false;
+  updateRunStatus("compiling");
 
+  // --- Компиляция ---
+  let compileResult;
   try {
-    configureSkulptRuntime(files, assets);
+    compileResult = await cppEngine.compile(files, { entry: entryName });
   } catch (error) {
-    appendConsole(`\n${formatSkulptError(error, state.lastRunSource)}\n`, true);
+    if (state.runToken !== runToken) return;
+    appendConsole(`\n${String((error && error.message) || error)}\n`, true);
     hardStop("error");
     return;
   }
-  const runToken = state.runToken + 1;
-  state.runToken = runToken;
-  const runtimeMain = sanitizeRuntimeSource(file.content);
-  state.lastRunSource = runtimeMain.code;
-  logRuntimeSourceDiagnostics({
-    entry: entryName,
-    controlCharsRemoved: runtimeMain.controlCharsRemoved,
-    invisibleCharsRemoved: runtimeMain.invisibleCharsRemoved,
-    changed: runtimeMain.changed
-  });
-  els.stopBtn.disabled = false;
-  enableConsoleInput(true);
+  if (state.runToken !== runToken) return;
 
-  if (state.runTimeout) {
-    clearTimeout(state.runTimeout);
-  }
-  state.runTimeout = setTimeout(() => {
-    softInterrupt("Time limit exceeded.");
-    state.runToken += 1;
+  printCompileDiagnostics(compileResult);
+  if (!compileResult.ok) {
     hardStop("error");
-  }, CONFIG.RUN_TIMEOUT_MS + 200);
+    return;
+  }
 
+  // --- Выполнение ---
+  updateRunStatus("running");
+  let runResult;
   try {
-    try {
-      await Sk.misceval.asyncToPromise(() =>
-        Sk.importMainWithBody("__cleanup__", false, MODULE_CLEANUP_CODE, true)
-      );
-    } catch (error) {
-      // Ignore cleanup failures and proceed with execution.
-    }
-    if (usesTurtle && CONFIG.ENABLE_TURTLE_IMAGE_COMPAT_PATCH) {
-      const setupCode = buildTurtleImagePatchCode(getTurtlePatchAssetNames(assets, isImageAsset));
-      try {
-        await Sk.misceval.asyncToPromise(() =>
-          Sk.importMainWithBody("__init_turtle_compat_patch__", false, setupCode, true)
-        );
-      } catch (err) {
-        console.warn("Turtle image compat patch failed", err);
-      }
-    }
-    await Sk.misceval.asyncToPromise(() =>
-      Sk.importMainWithBody("__main__", false, runtimeMain.code, true)
-    );
-    if (state.runToken !== runToken) {
-      return;
+    runResult = await cppEngine.run({
+      stdin: stdinBuffer,
+      onStdout: (text) => appendConsole(text, false),
+      onStderr: (text) => appendConsole(text, true)
+    });
+  } catch (error) {
+    if (state.runToken !== runToken) return;
+    appendConsole(`\n${String((error && error.message) || error)}\n`, true);
+    hardStop("error");
+    return;
+  }
+  if (state.runToken !== runToken) return;
+
+  if (runResult.timedOut) {
+    appendConsole(`\nПревышен лимит времени выполнения (${Math.round(CONFIG.RUN_TIMEOUT_MS / 1000)} с).\n`, true);
+    updateRunStatus("error");
+  } else if (runResult.error) {
+    appendConsole(`\n${runResult.error}\n`, true);
+    updateRunStatus("error");
+  } else {
+    if (runResult.exitCode && runResult.exitCode !== 0) {
+      appendConsole(`\n[программа завершилась с кодом ${runResult.exitCode}]\n`, true);
     }
     updateRunStatus("done");
-  } catch (error) {
-    if (state.runToken !== runToken) {
-      return;
+  }
+  if (runResult.truncated) {
+    appendConsole(`\n[вывод обрезан]\n`, true);
+  }
+
+  els.stopBtn.disabled = true;
+  state.stdinQueue = [];
+}
+
+/**
+ * Печатает диагностику компилятора (clang) в консоль: ошибки/предупреждения
+ * в формате file:line:col, либо краткую сводку при успехе с предупреждениями.
+ */
+function printCompileDiagnostics(result) {
+  const diagnostics = (result && result.diagnostics) || { items: [], counts: {} };
+  if (result && result.ok) {
+    if (diagnostics.counts && diagnostics.counts.warning) {
+      appendConsole(`${result.summary}\n`, false);
     }
-    appendConsole(`\n${formatSkulptError(error, state.lastRunSource)}\n`, true);
-    hardStop("error");
-  } finally {
-    if (state.runToken === runToken) {
-      enableConsoleInput(false);
-      els.stopBtn.disabled = true;
-      state.stdinResolver = null;
-      setConsoleInputWaiting(false);
-      state.stdinQueue = [];
+    return;
+  }
+  appendConsole("Ошибка компиляции:\n", true);
+  let shown = 0;
+  for (const item of diagnostics.items) {
+    if (item.severity === "error" || item.severity === "warning") {
+      appendConsole(`${item.file}:${item.line}:${item.col}: ${item.severity}: ${item.message}\n`, item.severity === "error");
+      shown += 1;
     }
-    if (state.runTimeout) {
-      clearTimeout(state.runTimeout);
-      state.runTimeout = null;
-    }
+  }
+  if (!shown && result && result.summary) {
+    appendConsole(`${result.summary}\n`, true);
   }
 }
 
@@ -3848,9 +3875,8 @@ function hardStop(status = "stopped") {
     clearTimeout(state.runTimeout);
     state.runTimeout = null;
   }
-  if (typeof Sk !== "undefined") {
-    Sk.execLimit = 1;
-    Sk.execStart = Date.now() - CONFIG.RUN_TIMEOUT_MS - 1;
+  if (cppEngine) {
+    cppEngine.cancelRun();
   }
   state.stdinQueue = [];
   setConsoleInputWaiting(false);

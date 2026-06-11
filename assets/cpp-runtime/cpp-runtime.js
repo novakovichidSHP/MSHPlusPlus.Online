@@ -96,8 +96,13 @@ class CppRuntime {
     this._emception = Comlink.wrap(this._worker);
 
     // Диагностика компилятора стекается в буфер (em++ пишет в оба потока).
+    // emception отдаёт текст по-строчно, но без гарантии завершающего \n →
+    // нормализуем перенос на каждый чанк, иначе строки clang склеиваются и
+    // парсер захватывает «сообщение + сниппет + caret» одной строкой.
     const sink = Comlink.proxy((chunk) => {
-      if (this._collecting) this._diagBuffer += chunk;
+      if (!this._collecting) return;
+      const text = String(chunk ?? "");
+      this._diagBuffer += text.endsWith("\n") ? text : text + "\n";
     });
     await (this._emception.onstdout = sink);
     await (this._emception.onstderr = sink);
