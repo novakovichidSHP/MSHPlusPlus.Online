@@ -157,7 +157,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3362">line 3362</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3258">line 3258</a>
     </li></ul></dd>
     
 
@@ -246,7 +246,7 @@ Updates active card, mobile navigation state and editor sync after layout update
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line747">line 747</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line710">line 710</a>
     </li></ul></dd>
     
 
@@ -308,7 +308,7 @@ Updates active card, mobile navigation state and editor sync after layout update
 
 
 <div class="description">
-    Binds UI handlers for IDE controls, editor, console and turtle interactions.
+    Binds UI handlers for IDE controls, editor and console interactions.
 Also registers responsive listeners for viewport changes.
 </div>
 
@@ -353,7 +353,7 @@ Also registers responsive listeners for viewport changes.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line495">line 495</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line475">line 475</a>
     </li></ul></dd>
     
 
@@ -461,7 +461,7 @@ and finally to Math.random() on older browsers.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line240">line 240</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line221">line 221</a>
     </li></ul></dd>
     
 
@@ -643,7 +643,7 @@ and finally to Math.random() on older browsers.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line301">line 301</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line282">line 282</a>
     </li></ul></dd>
     
 
@@ -757,7 +757,7 @@ Called once on page load. Shows loading guard while initializing.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line469">line 469</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line450">line 450</a>
     </li></ul></dd>
     
 
@@ -845,7 +845,7 @@ Called once on page load. Shows loading guard while initializing.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3378">line 3378</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3274">line 3274</a>
     </li></ul></dd>
     
 
@@ -889,21 +889,8 @@ Called once on page load. Shows loading guard while initializing.
 
 
 <div class="description">
-    ЗАКОНСЕРВИРОВАНО: Загрузка ресурсов (изображений)
-
-Причина: Skulpt не поддерживает загрузку изображений как форм черепахи.
-Это архитектурное ограничение - Skulpt's Shape класс был разработан только для
-полигонов (массивов координат). Когда вызывается Shape("image", name), создаётся
-объект, но нет механизма для загрузки актуального файла PNG/JPG или рендеринга
-через canvas drawImage().
-
-Trinket.io работает, потому что использует собственный turtle.js модуль (JavaScript)
-вместо встроенного Skulpt turtle, с явной поддержкой Image DOM элементов.
-
-Решение: либо переписать turtle модуль как в Trinket, либо обновить Skulpt
-до версии с поддержкой image shapes, либо использовать другую библиотеку графики.
-
-Функция остаётся в коде для возможности восстановления в будущем.
+    ЗАКОНСЕРВИРОВАНО: загрузка ресурсов (изображений). Панель «Ресурсы» скрыта;
+функция оставлена в коде для возможного восстановления в будущем.
 </div>
 
 
@@ -947,7 +934,7 @@ Trinket.io работает, потому что использует собст
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line1768">line 1768</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line1716">line 1716</a>
     </li></ul></dd>
     
 
@@ -1036,7 +1023,7 @@ Trinket.io работает, потому что использует собст
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3335">line 3335</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3231">line 3231</a>
     </li></ul></dd>
     
 
@@ -1125,7 +1112,7 @@ If user cancels naming modal, snapshot state remains unchanged.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line2385">line 2385</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line2303">line 2303</a>
     </li></ul></dd>
     
 
@@ -1231,7 +1218,7 @@ If user cancels naming modal, snapshot state remains unchanged.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line2405">line 2405</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line2323">line 2323</a>
     </li></ul></dd>
     
 
@@ -1338,7 +1325,7 @@ Supports project, snapshot and embed routes.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line924">line 924</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line887">line 887</a>
     </li></ul></dd>
     
 
@@ -1401,7 +1388,7 @@ Supports project, snapshot and embed routes.
 
 <div class="description">
     Компилирует и запускает main.cpp через cpp-runtime, обновляя состояние IDE.
-Handles stdin/stdout/stderr wiring, turtle visibility and mobile card focus.
+Handles stdin/stdout/stderr wiring and mobile card focus.
 </div>
 
 
@@ -1445,7 +1432,7 @@ Handles stdin/stdout/stderr wiring, turtle visibility and mobile card focus.
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3237">line 3237</a>
+        <a href="skulpt-app.js.html">skulpt-app.js</a>, <a href="skulpt-app.js.html#line3133">line 3133</a>
     </li></ul></dd>
     
 
@@ -1515,7 +1502,7 @@ Handles stdin/stdout/stderr wiring, turtle visibility and mobile card focus.
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Fri Jun 12 2026 13:07:41 GMT+0000 (Coordinated Universal Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Fri Jun 12 2026 20:55:38 GMT+0000 (Coordinated Universal Time)
 </footer>
 
 <script> prettyPrint(); </script>
