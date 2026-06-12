@@ -138,6 +138,7 @@
             <div id="run-status" class="run-status">Ожидание</div>
           </div>
           <div class="editor-controls">
+            <span class="lang-chip" title="Стандарт языка C++">C++20</span>
             <button id="tab-size-btn" class="btn chip hidden">Таб: 4</button>
             <button id="wrap-btn" class="btn chip hidden">Перенос: Выкл</button>
             <button id="font-dec-btn" class="btn ghost tiny" title="Уменьшить шрифт редактора">A-</button>
@@ -169,9 +170,13 @@
           </div>
         </div>
         <pre id="console-output" class="console-output"></pre>
+        <div class="stdin-label" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+          Ввод · stdin
+        </div>
         <div class="console-input-row">
           <textarea id="console-input" class="console-input"
-            placeholder="Введите input и нажмите Enter (Shift+Enter для новой строки)" disabled></textarea>
+            placeholder="Данные, которые программа прочитает через std::cin (Enter — отправить)" disabled></textarea>
           <button id="console-send" class="btn small" disabled>Отправить</button>
         </div>
       </section>
