@@ -173,6 +173,7 @@ const els = {
   runBtn: document.getElementById("run-btn"),
   stopBtn: document.getElementById("stop-btn"),
   clearBtn: document.getElementById("clear-btn"),
+  themeToggle: document.getElementById("theme-toggle"),
   shareBtn: document.getElementById("share-btn"),
   exportBtn: document.getElementById("export-btn"),
   importBtn: document.getElementById("import-btn"),
@@ -322,6 +323,42 @@ function safeLocalSet(key, value) {
   }
 }
 
+// --- Тема (светлая/тёмная) ---
+const THEME_STORAGE_KEY = "shp-theme";
+const THEME_ICON_MOON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>';
+const THEME_ICON_SUN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+
+function getStoredTheme() {
+  const stored = safeLocalGet(THEME_STORAGE_KEY);
+  if (stored === "dark" || stored === "light") {
+    return stored;
+  }
+  if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+}
+
+function currentTheme() {
+  return document.body.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  const next = theme === "dark" ? "dark" : "light";
+  document.body.dataset.theme = next === "dark" ? "dark" : "";
+  if (els.themeToggle) {
+    // в светлой теме показываем луну (клик → тёмная), в тёмной — солнце
+    els.themeToggle.innerHTML = next === "dark" ? THEME_ICON_SUN : THEME_ICON_MOON;
+  }
+  callEditorAdapterMethod("setTheme", next);
+}
+
+function toggleTheme() {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  safeLocalSet(THEME_STORAGE_KEY, next);
+  applyTheme(next);
+}
+
 function loadEditorMode() {
   return normalizeEditorMode(safeLocalGet(EDITOR_MODE_STORAGE_KEY), DEFAULT_EDITOR_MODE);
 }
@@ -407,6 +444,7 @@ function initEditorAdapter(mode, { preserve = false } = {}) {
   });
   state.editorAdapter.setSelection(preservedSelection);
   state.editorAdapter.setScroll(preservedScroll);
+  callEditorAdapterMethod("setTheme", currentTheme());
   updateEditorModeToggleLabel();
 }
 
@@ -457,6 +495,7 @@ async function init() {
   }
   state.editorMode = loadEditorMode();
   initEditorAdapter(state.editorMode);
+  applyTheme(getStoredTheme());
   loadSettings();
   /**
    * Binds all UI event handlers: buttons, hotkeys, editor, file list, etc.
@@ -493,6 +532,9 @@ function bindUi() {
   els.runBtn.addEventListener("click", runActiveFile);
   els.stopBtn.addEventListener("click", stopRun);
   els.clearBtn.addEventListener("click", clearConsole);
+  if (els.themeToggle) {
+    els.themeToggle.addEventListener("click", toggleTheme);
+  }
   els.shareBtn.addEventListener("click", shareProject);
   els.exportBtn.addEventListener("click", exportProject);
   if (els.importBtn) {

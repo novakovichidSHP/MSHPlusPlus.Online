@@ -48,6 +48,83 @@
   --shadow: 0 18px 35px rgba(18, 54, 110, 0.18);
 }
 
+/* Тёмная тема — палитра senior-МШП (deep purple + azure/cyan). Включается data-theme="dark" на <body>. */
+body[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #120a2b;
+  --bg-2: #181034;
+  --panel: #1b1140;
+  --panel-2: #241753;
+  --border: #2f245f;
+  --text: #e9e5ff;
+  --muted: #9b93c9;
+  --accent: #4d8bff;
+  --accent-2: #20c5e7;
+  --snapshot-banner-bg: #14323a;
+  --snapshot-banner-border: #1f6f6a;
+  --snapshot-banner-text: #7be3c8;
+  --remix-btn-bg: #2fae67;
+  --remix-btn-bg-hover: #29a05e;
+  --remix-btn-border: #248a52;
+  --remix-btn-outline: rgba(57, 194, 115, 0.32);
+  --danger: #ff6b6b;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Кнопка-тумблер темы (иконка луна/солнце) */
+.theme-toggle {
+  padding: 7px 9px;
+  line-height: 0;
+}
+.theme-toggle svg {
+  display: block;
+}
+
+/* Тёмная тема — поверхности chrome (база писалась с хардкод-цветами → переопределяем точечно) */
+body[data-theme="dark"] {
+  background: radial-gradient(circle at top, #1c1148 0%, var(--bg) 48%, #0d0722 100%);
+}
+body[data-theme="dark"] .topbar,
+body[data-theme="dark"] .landing-topbar {
+  background: rgba(27, 17, 64, 0.85);
+}
+body[data-theme="dark"] .editor-toolbar,
+body[data-theme="dark"] .tabs,
+body[data-theme="dark"] .console-input-row {
+  background: var(--panel-2);
+}
+body[data-theme="dark"] .console-pane,
+body[data-theme="dark"] .hero-card,
+body[data-theme="dark"] .modal-card,
+body[data-theme="dark"] .guard-card,
+body[data-theme="dark"] .recent-card,
+body[data-theme="dark"] .toast,
+body[data-theme="dark"] .pill {
+  background: var(--panel);
+}
+body[data-theme="dark"] .console-output {
+  background: #160e36;
+}
+body[data-theme="dark"] .console-input {
+  background: var(--panel-2);
+  color: var(--text);
+}
+body[data-theme="dark"] .tab {
+  background: var(--panel-2);
+}
+body[data-theme="dark"] .tab.active {
+  background: rgba(77, 139, 255, 0.18);
+  border-color: rgba(77, 139, 255, 0.45);
+  color: var(--text);
+}
+body[data-theme="dark"] .file-item,
+body[data-theme="dark"] .asset-item {
+  background: var(--panel-2);
+}
+body[data-theme="dark"] .hero-code-title {
+  color: var(--muted);
+}
+
 * {
   box-sizing: border-box;
 }

@@ -20993,6 +20993,42 @@ var legacyHighlightStyle = HighlightStyle.define([
     color: "#3A00DC"
   }
 ]);
+var darkHighlightStyle = HighlightStyle.define([
+  {
+    tag: [
+      tags.keyword,
+      tags.operatorKeyword,
+      tags.controlKeyword,
+      tags.definitionKeyword,
+      tags.moduleKeyword,
+      tags.modifier
+    ],
+    color: "#c792ea"
+  },
+  { tag: [tags.atom, tags.bool, tags.null], color: "#ff9cac" },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: "#c3e88d" },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: "#6b6f95", fontStyle: "italic" },
+  { tag: [tags.number, tags.integer, tags.float], color: "#f78c6c" },
+  { tag: [tags.standard(tags.name), tags.standard(tags.variableName)], color: "#82aaff" },
+  { tag: [tags.processingInstruction, tags.meta], color: "#ff7eb6" }
+]);
+var darkEditorTheme = EditorView.theme({
+  "&": { color: "#e8e4ff", backgroundColor: "#160e36" },
+  ".cm-content": { caretColor: "#82aaff" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#82aaff" },
+  ".cm-gutters": { backgroundColor: "#160e36", color: "#5b5f8c", border: "none" },
+  ".cm-activeLine": { backgroundColor: "rgba(124,108,255,.10)" },
+  ".cm-activeLineGutter": { backgroundColor: "rgba(124,108,255,.12)", color: "#9b93c9" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "rgba(124,108,255,.30)"
+  },
+  ".cm-matchingBracket": { backgroundColor: "rgba(130,170,255,.25)", outline: "none" }
+}, { dark: true });
+var lightThemeExtension = syntaxHighlighting(legacyHighlightStyle, { fallback: true });
+var darkThemeExtension = [darkEditorTheme, syntaxHighlighting(darkHighlightStyle, { fallback: true })];
+function getThemeExtension(theme2) {
+  return theme2 === "dark" ? darkThemeExtension : lightThemeExtension;
+}
 function clampSelection(value, max) {
   const next = Number(value) || 0;
   return Math.max(0, Math.min(max, next));
@@ -21001,7 +21037,8 @@ function normalizeSettings(settings = {}) {
   return {
     tabSize: Number(settings.tabSize) > 0 ? Number(settings.tabSize) : DEFAULT_TAB_SIZE,
     wordWrap: Boolean(settings.wordWrap),
-    fontSize: Number(settings.fontSize) > 0 ? Number(settings.fontSize) : DEFAULT_FONT_SIZE
+    fontSize: Number(settings.fontSize) > 0 ? Number(settings.fontSize) : DEFAULT_FONT_SIZE,
+    theme: settings.theme === "dark" ? "dark" : "light"
   };
 }
 function createCodeMirrorEditor({
@@ -21022,6 +21059,7 @@ function createCodeMirrorEditor({
   const readOnlyCompartment = new Compartment();
   const editableCompartment = new Compartment();
   const languageCompartment = new Compartment();
+  const themeCompartment = new Compartment();
   const settingsState = normalizeSettings(settings);
   const getWrapExtension = (enabled) => enabled ? EditorView.lineWrapping : [];
   const getTabExtension = (value) => EditorState.tabSize.of(value);
@@ -21068,7 +21106,7 @@ function createCodeMirrorEditor({
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
-    syntaxHighlighting(legacyHighlightStyle, { fallback: true }),
+    themeCompartment.of(getThemeExtension(settingsState.theme)),
     languageCompartment.of(cpp()),
     tabSizeCompartment.of(getTabExtension(settingsState.tabSize)),
     wrapCompartment.of(getWrapExtension(settingsState.wordWrap)),
@@ -21150,6 +21188,12 @@ function createCodeMirrorEditor({
     });
     syncRootMetrics();
   };
+  const setTheme = (theme2) => {
+    settingsState.theme = theme2 === "dark" ? "dark" : "light";
+    view.dispatch({
+      effects: themeCompartment.reconfigure(getThemeExtension(settingsState.theme))
+    });
+  };
   syncRootMetrics();
   return {
     kind: "cm6",
@@ -21164,6 +21208,7 @@ function createCodeMirrorEditor({
     setScroll,
     setReadOnly,
     applySettings,
+    setTheme,
     destroy() {
       if (destroyed) {
         return;

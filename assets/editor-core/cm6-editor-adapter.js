@@ -316,6 +316,9 @@ export function createCm6EditorAdapter({
     handleKeydown(event, { tabSize = currentTabSize } = {}) {
       return handleShortcutKeydown(event, { tabSize });
     },
+    setTheme(theme) {
+      cm6?.setTheme(theme === "dark" ? "dark" : "light");
+    },
     refreshDecorations() { },
     syncDecorationsScroll() { },
     setLineHighlight(lineNumber) {
