@@ -174,28 +174,11 @@
           <button id="console-send" class="btn small" disabled>Отправить</button>
         </div>
       </section>
-
-      <section id="turtle-pane" class="turtle-pane hidden">
-        <div class="panel-header turtle-header">
-          <div class="panel-title">Черепаха</div>
-          <div class="turtle-controls">
-            <label class="turtle-speed hidden" for="turtle-speed">
-              <span id="turtle-speed-label">Черепаха: Супер</span>
-              <input id="turtle-speed" type="range" min="0" max="2" step="1" value="2" />
-            </label>
-            <button id="turtle-clear" class="btn small">Очистить</button>
-          </div>
-        </div>
-        <div class="turtle-host">
-          <div id="turtle-canvas" tabindex="0" aria-label="Черепаха canvas"></div>
-        </div>
-      </section>
     </section>
     <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Навигация IDE">
       <button class="mobile-nav-btn" data-card="modules" aria-controls="sidebar" aria-pressed="false">Модули</button>
       <button class="mobile-nav-btn" data-card="editor" aria-controls="editor-pane" aria-pressed="true">Редактор</button>
       <button class="mobile-nav-btn" data-card="console" aria-controls="console-pane" aria-pressed="false">Консоль</button>
-      <button class="mobile-nav-btn" data-card="turtle" aria-controls="turtle-pane" aria-pressed="false">Черепаха</button>
     </nav>
     <button class="btn ghost topbar-restart restart-ide-floating restart-ide-floating-left" data-action="restart-ide"
       title="Перезапустить IDE с очисткой кеша">Перезапуск IDE</button>

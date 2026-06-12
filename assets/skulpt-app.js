@@ -3,7 +3,6 @@ import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createEditorAdapter } from "./editor-core/editor-adapter-factory.js";
-import { detectTurtleUsage } from "./utils/turtle-runtime-utils.js";
 import {
   DEFAULT_EDITOR_MODE,
   EDITOR_MODE_STORAGE_KEY,
@@ -26,8 +25,7 @@ const CONFIG = {
   MAX_TOTAL_TEXT_BYTES: 250000,
   MAX_SINGLE_FILE_BYTES: 50000,
   TAB_SIZE: 4,
-  WORD_WRAP: false,
-  ENABLE_TURTLE_IMAGE_COMPAT_PATCH: false
+  WORD_WRAP: false
 };
 const MAIN_FILE = "main.cpp";
 const EDITOR_FONT_MIN = 12;
@@ -36,7 +34,7 @@ const EDITOR_FONT_STEP = 1;
 const EDITOR_FONT_DEFAULT = 14;
 const MOBILE_CARD_BREAKPOINT = "(max-width: 768px)";
 const COMPACT_INPUT_BREAKPOINT = "(max-width: 1024px)";
-const UI_CARDS = ["modules", "editor", "console", "turtle"];
+const UI_CARDS = ["modules", "editor", "console"];
 const MOBILE_ACTION_LABELS = {
   share: "🔗",
   export: "⬆️",
@@ -106,15 +104,6 @@ const RUN_STATUS_LABELS = {
   error: "Ошибка",
   stopped: "Остановлено"
 };
-const TURTLE_CANVAS_WIDTH = 400;
-const TURTLE_CANVAS_HEIGHT = 400;
-const TURTLE_SPEED_PRESETS = [
-  { key: "slow", label: "Черепаха: Спокойно", multiplier: 1.3 },
-  { key: "fast", label: "Черепаха: Быстро", multiplier: 2.2 },
-  { key: "ultra", label: "Черепаха: Супер", multiplier: 3.6 }
-];
-const TURTLE_BASE_SPEED_PX_PER_MS = 1.1;
-const TURTLE_MIN_STEP_MS = 16;
 const IMAGE_ASSET_EXTENSIONS = new Set([
   ".png",
   ".jpg",
@@ -137,7 +126,6 @@ const state = {
   settings: {
     tabSize: CONFIG.TAB_SIZE,
     wordWrap: CONFIG.WORD_WRAP,
-    turtleSpeed: "ultra",
     editorFontSize: EDITOR_FONT_DEFAULT
   },
   runtimeReady: false,
@@ -147,8 +135,6 @@ const state = {
   stdinQueue: [],
   stdinWaiting: false,
   runTimeout: null,
-  turtleVisible: false,
-  turtleUsedLastRun: false,
   outputBytes: 0,
   saveTimer: null,
   draftTimer: null,
@@ -198,8 +184,6 @@ const els = {
   fontIncBtn: document.getElementById("font-inc-btn"),
   editorModeToggle: document.getElementById("editor-mode-toggle"),
   hotkeysBtn: document.getElementById("hotkeys-btn"),
-  turtleSpeedRange: document.getElementById("turtle-speed"),
-  turtleSpeedLabel: document.getElementById("turtle-speed-label"),
   sidebar: document.getElementById("sidebar"),
   editorPane: document.getElementById("editor-pane"),
   consolePane: document.getElementById("console-pane"),
@@ -225,9 +209,6 @@ const els = {
   runStatus: document.getElementById("run-status"),
   consoleLayoutToggle: document.getElementById("console-layout-toggle"),
   workspace: document.querySelector(".workspace"),
-  turtlePane: document.querySelector(".turtle-pane"),
-  turtleCanvas: document.getElementById("turtle-canvas"),
-  turtleClear: document.getElementById("turtle-clear"),
   renameBtn: document.getElementById("rename-btn")
 };
 
@@ -470,7 +451,6 @@ async function init() {
   showGuard(true);
   bindUi();
   startHeroTyping();
-  setTurtlePaneVisible(false);
   state.db = await openDb();
   if (!state.db) {
     showToast("Storage fallback: changes will not persist in this browser.");
@@ -488,7 +468,7 @@ async function init() {
 }
 
 /**
- * Binds UI handlers for IDE controls, editor, console and turtle interactions.
+ * Binds UI handlers for IDE controls, editor and console interactions.
  * Also registers responsive listeners for viewport changes.
  * @returns {void}
  */
@@ -563,10 +543,6 @@ function bindUi() {
   if (els.consoleLayoutToggle) {
     els.consoleLayoutToggle.addEventListener("click", toggleConsoleLayout);
   }
-  if (els.turtleSpeedRange) {
-    els.turtleSpeedRange.addEventListener("input", onTurtleSpeedInput);
-  }
-
   els.fileCreate.addEventListener("click", () => createFile());
   els.fileRename.addEventListener("click", () => renameFile());
   els.fileDuplicate.addEventListener("click", () => duplicateFile());
@@ -597,8 +573,6 @@ function bindUi() {
       submitConsoleInput();
     }
   });
-
-  els.turtleClear.addEventListener("click", () => clearTurtleCanvas());
 
   document.addEventListener("keydown", (event) => {
     if (!els.modal.classList.contains("hidden")) {
@@ -632,11 +606,6 @@ function bindUi() {
     if (event.altKey && event.key === "2") {
       event.preventDefault();
       els.consoleInput.focus();
-    }
-    // Focus on turtle canvas (Alt+3)
-    if (event.altKey && event.key === "3") {
-      event.preventDefault();
-      els.turtleCanvas.focus();
     }
   });
 }
@@ -700,18 +669,12 @@ function getCardElement(card) {
   if (card === "console") {
     return els.consolePane;
   }
-  if (card === "turtle") {
-    return els.turtlePane;
-  }
   return null;
 }
 
 function isCardAvailable(card) {
   const element = getCardElement(card);
   if (!element || element.classList.contains("hidden")) {
-    return false;
-  }
-  if (card === "turtle" && els.workspace && els.workspace.classList.contains("no-turtle")) {
     return false;
   }
   return true;
@@ -722,7 +685,7 @@ function getFallbackCard(preferred) {
   if (preferred && UI_CARDS.includes(preferred)) {
     candidates.push(preferred);
   }
-  candidates.push("editor", "console", "modules", "turtle");
+  candidates.push("editor", "console", "modules");
   for (const card of candidates) {
     if (isCardAvailable(card)) {
       return card;
@@ -1036,7 +999,6 @@ async function openProject(projectId) {
 
   setMode("project");
   renderProject();
-  updateTurtleVisibilityForRun(state.project.files);
   await rememberRecent(project.projectId);
 }
 
@@ -1227,7 +1189,6 @@ async function openSnapshot(shareId, payload) {
 
     setMode("snapshot");
     renderSnapshot();
-    updateTurtleVisibilityForRun(getEffectiveFiles());
   } catch (error) {
     console.error(error);
     showToast("Не удалось открыть снимок.");
@@ -1749,21 +1710,8 @@ function updateDraftFile(name, content) {
 }
 
 /**
- * ЗАКОНСЕРВИРОВАНО: Загрузка ресурсов (изображений)
- * 
- * Причина: Skulpt не поддерживает загрузку изображений как форм черепахи.
- * Это архитектурное ограничение - Skulpt's Shape класс был разработан только для
- * полигонов (массивов координат). Когда вызывается Shape("image", name), создаётся
- * объект, но нет механизма для загрузки актуального файла PNG/JPG или рендеринга
- * через canvas drawImage().
- * 
- * Trinket.io работает, потому что использует собственный turtle.js модуль (JavaScript)
- * вместо встроенного Skulpt turtle, с явной поддержкой Image DOM элементов.
- * 
- * Решение: либо переписать turtle модуль как в Trinket, либо обновить Skulpt
- * до версии с поддержкой image shapes, либо использовать другую библиотеку графики.
- * 
- * Функция остаётся в коде для возможности восстановления в будущем.
+ * ЗАКОНСЕРВИРОВАНО: загрузка ресурсов (изображений). Панель «Ресурсы» скрыта;
+ * функция оставлена в коде для возможного восстановления в будущем.
  */
 async function onAssetUpload(event) {
   if (state.mode !== "project") {
@@ -1840,30 +1788,9 @@ function changeEditorFontSize(delta) {
   applyEditorSettings();
 }
 
-function getTurtleSpeedPreset() {
-  const current = state.settings.turtleSpeed;
-  return TURTLE_SPEED_PRESETS.find((preset) => preset.key === current) || TURTLE_SPEED_PRESETS[0];
-}
 
-function getTurtleSpeedIndex() {
-  const currentIndex = TURTLE_SPEED_PRESETS.findIndex((preset) => preset.key === state.settings.turtleSpeed);
-  return currentIndex >= 0 ? currentIndex : 0;
-}
 
-function setTurtleSpeedByIndex(index) {
-  const maxIndex = TURTLE_SPEED_PRESETS.length - 1;
-  const clamped = Math.max(0, Math.min(maxIndex, index));
-  state.settings.turtleSpeed = TURTLE_SPEED_PRESETS[clamped].key;
-  saveSettings();
-  applyEditorSettings();
-}
 
-function onTurtleSpeedInput() {
-  if (!els.turtleSpeedRange) {
-    return;
-  }
-  setTurtleSpeedByIndex(Number(els.turtleSpeedRange.value));
-}
 
 function applyEditorSettings() {
   const fontSize = clampEditorFontSize(state.settings.editorFontSize);
@@ -1888,12 +1815,6 @@ function applyEditorSettings() {
   }
   els.tabSizeBtn.textContent = `Таб: ${state.settings.tabSize}`;
   els.wrapBtn.textContent = `Перенос: ${state.settings.wordWrap ? "Вкл" : "Выкл"}`;
-  if (els.turtleSpeedLabel) {
-    els.turtleSpeedLabel.textContent = getTurtleSpeedPreset().label;
-  }
-  if (els.turtleSpeedRange) {
-    els.turtleSpeedRange.value = String(getTurtleSpeedIndex());
-  }
   if (els.fontDecBtn) {
     els.fontDecBtn.disabled = fontSize <= EDITOR_FONT_MIN;
   }
@@ -1918,9 +1839,6 @@ function loadSettings() {
   state.settings.tabSize = CONFIG.TAB_SIZE;
   state.settings.wordWrap = CONFIG.WORD_WRAP;
   state.settings.editorFontSize = clampEditorFontSize(state.settings.editorFontSize);
-  if (!TURTLE_SPEED_PRESETS.some((preset) => preset.key === state.settings.turtleSpeed)) {
-    state.settings.turtleSpeed = "ultra";
-  }
   applyEditorSettings();
 }
 
@@ -3184,17 +3102,6 @@ function getActiveTabName() {
   return tab ? tab.textContent : null;
 }
 
-function setTurtlePaneVisible(visible) {
-  const nextVisible = Boolean(visible);
-  state.turtleVisible = nextVisible;
-  if (els.turtlePane) {
-    els.turtlePane.classList.toggle("hidden", !nextVisible);
-  }
-  if (els.workspace) {
-    els.workspace.classList.toggle("no-turtle", !nextVisible);
-  }
-  applyResponsiveCardState();
-}
 
 function setConsoleLayout(right) {
   if (!els.workspace) {
@@ -3216,21 +3123,10 @@ function toggleConsoleLayout() {
   setConsoleLayout(!els.workspace.classList.contains("console-right"));
 }
 
-function updateTurtleVisibilityForRun(files) {
-  // Use entry point or all project files to check for turtle
-  const usesTurtle = detectTurtleUsage(files);
-  state.turtleUsedLastRun = usesTurtle;
-  setTurtlePaneVisible(usesTurtle);
-  // Ensure the workspace layout updates
-  if (els.workspace) {
-    els.workspace.classList.toggle("no-turtle", !usesTurtle);
-  }
-  return usesTurtle;
-}
 
 /**
  * Компилирует и запускает main.cpp через cpp-runtime, обновляя состояние IDE.
- * Handles stdin/stdout/stderr wiring, turtle visibility and mobile card focus.
+ * Handles stdin/stdout/stderr wiring and mobile card focus.
  * @async
  * @returns {Promise<void>}
  */
@@ -3405,34 +3301,8 @@ function softInterrupt(message) {
   appendConsole(`\n${message}\n`, true);
 }
 
-function stopTurtleAnimation() {
-  const target = getTurtleTarget();
-  if (!target) {
-    return;
-  }
-  const instance = target.turtleInstance;
-  if (!instance) {
-    return;
-  }
-  if (typeof instance.stop === "function") {
-    try {
-      instance.stop();
-      return;
-    } catch (error) {
-      // fall through to other options
-    }
-  }
-  if (typeof instance.pause === "function") {
-    try {
-      instance.pause();
-    } catch (error) {
-      // ignore pause failures
-    }
-  }
-}
 
 function hardStop(status = "stopped") {
-  stopTurtleAnimation();
   if (state.runTimeout) {
     clearTimeout(state.runTimeout);
     state.runTimeout = null;
@@ -3451,35 +3321,8 @@ function hardStop(status = "stopped") {
 
 
 
-function getTurtleTarget() {
-  if (!els.turtleCanvas) {
-    return null;
-  }
-  return els.turtleCanvas;
-}
 
-function resetNativeTurtle() {
-  const target = getTurtleTarget();
-  if (!target) {
-    return;
-  }
-  const instance = target.turtleInstance;
-  if (instance && typeof instance.reset === "function") {
-    try {
-      instance.reset();
-      return;
-    } catch (error) {
-      // fall through to container cleanup
-    }
-  }
-  while (target.firstChild) {
-    target.removeChild(target.firstChild);
-  }
-}
 
-function clearTurtleCanvas() {
-  resetNativeTurtle();
-}
 
 function openModal(html, onAction) {
   els.modal.innerHTML = html;
@@ -3515,7 +3358,6 @@ function showHotkeysModal() {
         <li><strong>Alt+C</strong> — Очистить консоль</li>
         <li><strong>Alt+1</strong> — Фокус на редактор кода</li>
         <li><strong>Alt+2</strong> — Фокус на консоль (для input)</li>
-        <li><strong>Alt+3</strong> — Фокус на черепаху</li>
         <li style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;"><strong>Редактор кода:</strong></li>
         <li><strong>Tab</strong> — Отступ</li>
         <li><strong>Alt+/</strong> — Комментировать строку</li>
