@@ -31,8 +31,7 @@ import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createEditorAdapter } from "./editor-core/editor-adapter-factory.js";
-import { buildTurtleImagePatchCode } from "./compat/turtle-image-patch.js";
-import { detectTurtleUsage, getTurtlePatchAssetNames } from "./utils/turtle-runtime-utils.js";
+import { detectTurtleUsage } from "./utils/turtle-runtime-utils.js";
 import {
   DEFAULT_EDITOR_MODE,
   EDITOR_MODE_STORAGE_KEY,
@@ -42,7 +41,7 @@ import {
 import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 
-// Движок C++ (emception) — занимает место Skulpt. Инициализируется в initCppRuntime().
+// Движок C++ (emception) — занимает место Skulpt. Инициализируется в initRuntime().
 // baseUrl относителен расположению cpp-runtime.js (assets/cpp-runtime/) → ../../toolchain/
 // разрешается в &lt;корень-сайта>/toolchain/ независимо от того, где смонтирован сайт.
 let cppEngine = null;
@@ -172,16 +171,12 @@ const state = {
   runtimeReady: false,
   stdinResolver: null,
   runToken: 0,
-  skulptFiles: null,
-  skulptAssets: null,
-  skulptAssetUrls: new Map(),
   runtimeBlocked: false,
   stdinQueue: [],
   stdinWaiting: false,
   runTimeout: null,
   turtleVisible: false,
   turtleUsedLastRun: false,
-  lastRunSource: "",
   outputBytes: 0,
   saveTimer: null,
   draftTimer: null,
@@ -527,7 +522,7 @@ async function init() {
    * Binds all UI event handlers: buttons, hotkeys, editor, file list, etc.
    * Must be called before any UI interactions.
    */
-  initSkulpt();
+  initRuntime();
   window.addEventListener("hashchange", router);
   await router();
 }
@@ -3076,156 +3071,16 @@ function submitConsoleInput() {
   });
 }
 
-function deliverInput() {
-  if (!state.stdinQueue.length || !state.stdinResolver) {
-    return;
-  }
-  const value = state.stdinQueue.shift();
-  const resolver = state.stdinResolver;
-  state.stdinResolver = null;
-  setConsoleInputWaiting(false);
-  resolver(value);
-}
 
-function skulptInput(prompt) {
-  if (prompt) {
-    appendConsole(String(prompt), false);
-  }
-  if (state.stdinQueue.length) {
-    return state.stdinQueue.shift();
-  }
-  setConsoleInputWaiting(true);
-  enableConsoleInput(true);
-  return new Promise((resolve) => {
-    state.stdinResolver = resolve;
-  });
-}
 
-function lineOfIndex(source, index) {
-  const safeIndex = Math.max(0, Math.min(String(source || "").length, index));
-  let line = 1;
-  for (let i = 0; i &lt; safeIndex; i += 1) {
-    if (source[i] === "\n") {
-      line += 1;
-    }
-  }
-  return line;
-}
 
-function detectUnclosedDelimiterLine(source) {
-  const code = String(source || "");
-  const stack = [];
-  let quote = null;
-  let escaped = false;
-  let comment = false;
-  for (let i = 0; i &lt; code.length; i += 1) {
-    const ch = code[i];
-    if (comment) {
-      if (ch === "\n") {
-        comment = false;
-      }
-      continue;
-    }
-    if (quote) {
-      if (!escaped &amp;&amp; ch === quote) {
-        quote = null;
-      }
-      escaped = ch === "\\" &amp;&amp; !escaped;
-      continue;
-    }
-    if (ch === "#") {
-      comment = true;
-      continue;
-    }
-    if (ch === "'" || ch === "\"") {
-      quote = ch;
-      escaped = false;
-      continue;
-    }
-    if (ch === "(" || ch === "[" || ch === "{") {
-      stack.push({ ch, line: lineOfIndex(code, i) });
-      continue;
-    }
-    if (ch === ")" || ch === "]" || ch === "}") {
-      const top = stack[stack.length - 1];
-      if (!top) {
-        continue;
-      }
-      const matches = (top.ch === "(" &amp;&amp; ch === ")")
-        || (top.ch === "[" &amp;&amp; ch === "]")
-        || (top.ch === "{" &amp;&amp; ch === "}");
-      if (matches) {
-        stack.pop();
-      }
-    }
-  }
-  return stack.length ? stack[stack.length - 1].line : null;
-}
 
-function normalizeEofLineMessage(text, source) {
-  const match = String(text || "").match(/EOF in multi-line statement on line\s+(\d+)/i);
-  if (!match) {
-    return String(text || "");
-  }
-  const unclosedLine = detectUnclosedDelimiterLine(source);
-  if (!Number.isFinite(unclosedLine) || unclosedLine &lt; 1) {
-    return String(text || "");
-  }
-  return String(text || "").replace(
-    /EOF in multi-line statement on line\s+\d+/i,
-    `EOF in multi-line statement on line ${unclosedLine}`
-  );
-}
 
-function formatSkulptError(error, source = "") {
-  if (!error) {
-    return "Unknown error";
-  }
-  try {
-    const baseException = Sk &amp;&amp; Sk.builtin &amp;&amp; Sk.builtin.BaseException;
-    if (baseException &amp;&amp; error instanceof baseException) {
-      return normalizeEofLineMessage(error.toString(), source);
-    }
-  } catch (e) {
-    // fall through to generic formatting
-  }
-  if (error.stack) {
-    return normalizeEofLineMessage(error.stack, source);
-  }
-  return normalizeEofLineMessage(String(error), source);
-}
 
-function normalizeSourceLineEndings(text) {
-  return String(text ?? "").replace(/\r\n?/g, "\n");
-}
 
-function sanitizeRuntimeSource(text) {
-  const normalized = normalizeSourceLineEndings(text);
-  const controlChars = normalized.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g) || [];
-  const invisibleChars = normalized.match(/[\u200B\u200C\u200D\u2060\uFEFF]/g) || [];
-  let code = normalized;
-  if (controlChars.length) {
-    code = code.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, " ");
-  }
-  if (invisibleChars.length) {
-    code = code.replace(/[\u200B\u200C\u200D\u2060\uFEFF]/g, "");
-  }
-  return {
-    code,
-    changed: code !== String(text ?? ""),
-    controlCharsRemoved: controlChars.length,
-    invisibleCharsRemoved: invisibleChars.length
-  };
-}
 
-function logRuntimeSourceDiagnostics(meta) {
-  if (!meta || !meta.changed) {
-    return;
-  }
-  console.warn("[runtime-source-normalized]", meta);
-}
 
-function initSkulpt() {
+function initRuntime() {
   // Старт C++-движка (emception). Тулчейн ~25 МБ грузится асинхронно — до готовности
   // запуск заблокирован, статус «Загрузка компилятора…». UX/вёрстка не меняются.
   cppEngine = createCppRuntime({
@@ -3252,149 +3107,12 @@ function initSkulpt() {
 
 
 
-function getTurtleCanvasSize() {
-  if (!els.turtleCanvas) {
-    return { width: TURTLE_CANVAS_WIDTH, height: TURTLE_CANVAS_HEIGHT };
-  }
-  const rect = els.turtleCanvas.getBoundingClientRect();
-  const width = Math.round(els.turtleCanvas.clientWidth || rect.width) || TURTLE_CANVAS_WIDTH;
-  const height = Math.round(els.turtleCanvas.clientHeight || rect.height) || TURTLE_CANVAS_HEIGHT;
-  return {
-    width: Math.max(1, width),
-    height: Math.max(1, height)
-  };
-}
 
-function configureSkulptRuntime(files, assets, options = {}) {
-  state.skulptFiles = buildSkulptFileMap(files);
-  state.skulptAssets = buildSkulptAssetMap(assets);
-  const turtleAssets = setSkulptTurtleAssets(assets);
-  const turtleSize = getTurtleCanvasSize();
-  const debugSession = null; // options.debugger || null;
-  // const enableDebugging = Boolean(debugSession); // Forced off
-  Sk.inBrowser = true;
-  if (!Sk.asserts) {
-    Sk.asserts = {
-      assert: () => true,
-      fail: () => { }
-    };
-  } else {
-    if (typeof Sk.asserts.assert !== "function") {
-      Sk.asserts.assert = () => true;
-    }
-    if (typeof Sk.asserts.fail !== "function") {
-      Sk.asserts.fail = () => { };
-    }
-  }
 
-  // POLYFILL SK.CONFIGURE
-  if (typeof Sk.configure !== "function") {
-    Sk.configure = function (config) {
-      Sk.output = config.output;
-      Sk.read = config.read;
-      Sk.inputfun = config.inputfun;
-      Sk.inputfunTakesPrompt = config.inputfunTakesPrompt;
-      Sk.execLimit = config.execLimit;
-      Sk.yieldLimit = config.yieldLimit;
-      Sk.syspath = config.syspath;
-      // Debugging and breakpoints suppressed
-    };
-  }
 
-  Sk.configure({
-    output: (text) => appendConsole(text, false),
-    read: skulptRead,
-    inputfun: skulptInput,
-    inputfunTakesPrompt: true,
-    execLimit: CONFIG.RUN_TIMEOUT_MS,
-    yieldLimit: 100,
-    syspath: ["/project"],
-    debugging: false,
-    breakpoints: undefined
-  });
-  Sk.execLimit = CONFIG.RUN_TIMEOUT_MS;
-  Sk.execStart = Date.now();
-  Sk.TurtleGraphics = {
-    target: "turtle-canvas",
-    width: TURTLE_CANVAS_WIDTH,
-    height: TURTLE_CANVAS_HEIGHT,
-    assets: turtleAssets
-  };
-  resetNativeTurtle();
-}
 
-function skulptRead(path) {
-  const files = state.skulptFiles;
-  const assets = state.skulptAssets;
-  const normalized = normalizeSkulptPath(path);
-  const projectOverride = resolveProjectModuleOverridePath(path, normalized);
 
-  if (files &amp;&amp; files.has(normalized)) {
-    return files.get(normalized);
-  }
-  if (assets &amp;&amp; assets.has(normalized)) {
-    return assets.get(normalized);
-  }
-  if (files &amp;&amp; projectOverride &amp;&amp; files.has(projectOverride)) {
-    return files.get(projectOverride);
-  }
-  if (Sk.builtinFiles &amp;&amp; Sk.builtinFiles["files"] &amp;&amp; Sk.builtinFiles["files"][path] !== undefined) {
-    return Sk.builtinFiles["files"][path];
-  }
-  if (Sk.builtinFiles &amp;&amp; Sk.builtinFiles["files"] &amp;&amp; Sk.builtinFiles["files"][normalized] !== undefined) {
-    return Sk.builtinFiles["files"][normalized];
-  }
-  throw new Sk.builtin.IOError(`File not found: '${path}'`);
-}
 
-function normalizeSkulptPath(path) {
-  if (!path) {
-    return "";
-  }
-  if (path.startsWith("/project/")) {
-    return path;
-  }
-  if (path.startsWith("./")) {
-    return `/project/${path.slice(2)}`;
-  }
-  if (path.startsWith("/")) {
-    return path;
-  }
-  return `/project/${path}`;
-}
-
-function resolveProjectModuleOverridePath(path, normalizedPath) {
-  const raw = String(path || "");
-  if (raw.startsWith("src/lib/")) {
-    return `/project/${raw.slice("src/lib/".length)}`;
-  }
-  if (String(normalizedPath || "").startsWith("/src/lib/")) {
-    return `/project/${String(normalizedPath).slice("/src/lib/".length)}`;
-  }
-  return null;
-}
-
-function buildSkulptFileMap(files) {
-  const map = new Map();
-  files.forEach((file) => {
-    const name = String(file.name || "");
-    const prepared = sanitizeRuntimeSource(file.content);
-    map.set(`/project/${name}`, prepared.code);
-  });
-  return map;
-}
-
-function buildSkulptAssetMap(assets) {
-  const map = new Map();
-  assets.forEach((asset) => {
-    const name = String(asset.name || "");
-    const data = asset.data instanceof Uint8Array ? asset.data : new Uint8Array(asset.data || []);
-    const decoded = decodeAssetBytes(data, name);
-    map.set(`/project/${name}`, decoded);
-    map.set(name, decoded);
-  });
-  return map;
-}
 
 function normalizeAssetName(name) {
   if (!name) {
@@ -3419,12 +3137,6 @@ function getAssetExtension(name) {
   return normalized.slice(idx).toLowerCase();
 }
 
-function isImageAsset(name, mime) {
-  if (mime &amp;&amp; mime.startsWith("image/")) {
-    return true;
-  }
-  return IMAGE_ASSET_EXTENSIONS.has(getAssetExtension(name));
-}
 
 function guessImageMime(name) {
   switch (getAssetExtension(name)) {
@@ -3448,179 +3160,7 @@ function guessImageMime(name) {
 
 
 
-function getSkulptAssetUrl(name) {
-  if (!name) {
-    return null;
-  }
-  const normalized = normalizeAssetName(name);
-  const lower = normalized.toLowerCase();
 
-  // Case-insensitive lookup in skulptAssetUrls
-  let url = state.skulptAssetUrls.get(name) ||
-    state.skulptAssetUrls.get(normalized) ||
-    state.skulptAssetUrls.get(lower) ||
-    state.skulptAssetUrls.get(`/project/${normalized}`) ||
-    state.skulptAssetUrls.get(`./${normalized}`) ||
-    null;
-
-  // If not found, try iterating and finding case-insensitive match
-  if (!url) {
-    for (let [k, v] of state.skulptAssetUrls) {
-      if (k.toLowerCase() === lower) {
-        url = v;
-        break;
-      }
-    }
-  }
-
-  if (url) {
-    return url;
-  }
-  // Если не найдено в ассетах, пытаемся прочитать из файловой системы Skulpt
-  if (!isImageAsset(name)) {
-    return null;
-  }
-  // Проверяем, что Skulpt готов и skulptRead доступна
-  if (!state.skulptFiles || typeof skulptRead !== "function") {
-    return null;
-  }
-  try {
-    const normalizedPath = normalizeSkulptPath(name);
-    const data = skulptRead(normalizedPath);
-    if (!data) {
-      return null;
-    }
-    // Преобразуем данные в Uint8Array, если это строка
-    let bytes;
-    if (typeof data === "string") {
-      bytes = new Uint8Array(data.length);
-      for (let i = 0; i &lt; data.length; i++) {
-        bytes[i] = data.charCodeAt(i) &amp; 0xff;
-      }
-    } else if (data instanceof Uint8Array) {
-      bytes = data;
-    } else if (data instanceof ArrayBuffer) {
-      bytes = new Uint8Array(data);
-    } else {
-      return null;
-    }
-    // Создаем blob URL
-    if (typeof URL === "undefined" || typeof Blob === "undefined") {
-      return null;
-    }
-    const blob = new Blob([bytes], { type: guessImageMime(name) });
-    url = URL.createObjectURL(blob);
-    // Сохраняем в кэш
-    state.skulptAssetUrls.set(name, url);
-    state.skulptAssetUrls.set(normalized, url);
-    state.skulptAssetUrls.set(`/project/${name}`, url);
-    state.skulptAssetUrls.set(`./${name}`, url);
-    state.skulptAssetUrls.set(`/project/${normalized}`, url);
-    state.skulptAssetUrls.set(`./${normalized}`, url);
-    return url;
-  } catch (error) {
-    // Файл не найден или ошибка чтения
-    // Игнорируем IOError и другие ошибки
-    return null;
-  }
-}
-
-function setSkulptTurtleAssets(assets) {
-  revokeSkulptAssetUrls();
-  const assetMap = {};
-  const urlMap = new Map();
-
-  if (assets &amp;&amp; assets.length) {
-    assets.forEach((asset) => {
-      const name = String(asset.name || "");
-      if (!name || !isImageAsset(name, asset.mime)) {
-        return;
-      }
-      if (typeof URL === "undefined" || typeof Blob === "undefined") {
-        return;
-      }
-      let url = null;
-      try {
-        const blob = new Blob([asset.data], { type: asset.mime || guessImageMime(name) });
-        url = URL.createObjectURL(blob);
-      } catch (error) {
-        url = null;
-      }
-      if (!url) {
-        return;
-      }
-      const normalized = normalizeAssetName(name);
-      assetMap[name] = url;
-      assetMap[normalized] = url;
-      assetMap[`/project/${name}`] = url;
-      assetMap[`./${name}`] = url;
-      assetMap[`/project/${normalized}`] = url;
-      assetMap[`./${normalized}`] = url;
-      urlMap.set(name, url);
-      urlMap.set(normalized, url);
-      urlMap.set(`/project/${name}`, url);
-      urlMap.set(`./${name}`, url);
-      urlMap.set(`/project/${normalized}`, url);
-      urlMap.set(`./${normalized}`, url);
-      if (asset.blobId) {
-        urlMap.set(asset.blobId, url);
-      }
-    });
-  }
-
-  state.skulptAssetUrls = urlMap;
-
-  return new Proxy(assetMap, {
-    get(target, prop) {
-      if (typeof prop === "symbol") {
-        return target[prop];
-      }
-      const key = String(prop);
-      if (Object.prototype.hasOwnProperty.call(target, key)) {
-        return target[key];
-      }
-      const url = getSkulptAssetUrl(key);
-      if (url) {
-        target[key] = url;
-        return url;
-      }
-      return undefined;
-    },
-    has(target, prop) {
-      if (typeof prop === "symbol") {
-        return prop in target;
-      }
-      const key = String(prop);
-      if (Object.prototype.hasOwnProperty.call(target, key)) {
-        return true;
-      }
-      const url = getSkulptAssetUrl(key);
-      return !!url;
-    },
-    ownKeys(target) {
-      const keys = new Set(Object.keys(target));
-      if (state.skulptAssetUrls) {
-        state.skulptAssetUrls.forEach((_, key) => keys.add(key));
-      }
-      return Array.from(keys);
-    },
-    getOwnPropertyDescriptor(target, prop) {
-      if (Object.prototype.hasOwnProperty.call(target, prop)) {
-        return Object.getOwnPropertyDescriptor(target, prop);
-      }
-      const url = getSkulptAssetUrl(String(prop));
-      if (url) {
-        return {
-          value: url,
-          writable: true,
-          enumerable: true,
-          configurable: true
-        };
-      }
-      return undefined;
-    }
-  });
-}
 
 const TEXT_ASSET_EXTENSIONS = new Set([
   ".py",
@@ -3672,29 +3212,6 @@ function bytesToBinaryString(bytes) {
   return result;
 }
 
-const MODULE_CLEANUP_CODE = `
-import sys, os
-project_dir = os.getcwd()
-project_modules = set()
-try:
-    for fname in os.listdir(project_dir):
-        if fname.endswith(".py"):
-            project_modules.add(os.path.splitext(fname)[0])
-except Exception:
-    project_modules = set()
-for name, module in list(sys.modules.items()):
-    if name == "__main__":
-        continue
-    try:
-        mod_file = getattr(module, "__file__", "")
-    except Exception:
-        mod_file = ""
-    if mod_file and str(mod_file).startswith(project_dir):
-        sys.modules.pop(name, None)
-        continue
-    if name in project_modules:
-        sys.modules.pop(name, None)
-`;
 
 function getActiveTabName() {
   if (!els.fileTabs) {
@@ -3752,7 +3269,7 @@ function updateTurtleVisibilityForRun(files) {
 }
 
 /**
- * Executes `main.py` in Skulpt runtime and updates IDE run state.
+ * Компилирует и запускает main.cpp через cpp-runtime, обновляя состояние IDE.
  * Handles stdin/stdout/stderr wiring, turtle visibility and mobile card focus.
  * @async
  * @returns {Promise&lt;void>}
@@ -3969,41 +3486,10 @@ function hardStop(status = "stopped") {
   updateRunStatus(status);
   enableConsoleInput(false);
   els.stopBtn.disabled = true;
-  revokeSkulptAssetUrls();
-}
-
-async function loadAssets() {
-  const assets = [];
-  if (!state.project || !state.project.assets) {
-    return assets;
-  }
-  for (const asset of state.project.assets) {
-    const record = await dbGet("blobs", asset.blobId);
-    if (!record) {
-      continue;
-    }
-    const buffer = await readBlobData(record.data);
-    assets.push({
-      name: asset.name,
-      mime: asset.mime,
-      blobId: asset.blobId,
-      data: buffer
-    });
-  }
-  return assets;
 }
 
 
-function revokeSkulptAssetUrls() {
-  state.skulptAssetUrls.forEach((url) => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      // Ignore
-    }
-  });
-  state.skulptAssetUrls.clear();
-}
+
 
 function getTurtleTarget() {
   if (!els.turtleCanvas) {
@@ -4368,7 +3854,7 @@ async function dbDelete(storeName, key) {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Thu Jun 11 2026 22:09:30 GMT+0000 (Coordinated Universal Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Fri Jun 12 2026 12:50:53 GMT+0000 (Coordinated Universal Time)
 </footer>
 
 <script> prettyPrint(); </script>
