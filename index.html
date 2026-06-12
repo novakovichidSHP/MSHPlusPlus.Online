@@ -6,9 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'" />
-  <title>МШПайтон.Онлайн - Web IDE Python</title>
-  <link rel="icon"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🐍%3C/text%3E%3C/svg%3E" />
+  <title>МШПлюсПлюс.Онлайн — Web IDE C++</title>
+  <link rel="icon" href="assets/shp-logo.webp" />
   <link rel="stylesheet" href="assets/skulpt-styles.css" />
   <link rel="stylesheet" href="assets/editor-legacy/legacy-editor.css" />
 </head>
@@ -32,20 +31,20 @@
   <main id="view-landing" class="view landing hidden">
     <div class="landing-topbar">
       <div class="pill landing-brand"><img src="assets/shp-logo.webp" alt="" /><span
-          class="pill-name">&#1052;&#1064;&#1055;&#1072;&#1081;&#1090;&#1086;&#1085;.&#1054;&#1085;&#1083;&#1072;&#1081;&#1085;</span>
+          class="pill-name">МШПлюсПлюс.Онлайн</span>
       </div>
       <a class="btn small landing-guide" href="docs/user_guide/for_users.html" target="_blank" rel="noopener noreferrer">Руководство</a>
     </div>
     <section class="hero">
       <div class="hero-text">
-        <h1>Создавайте, запускайте и делитесь Python‑проектами в браузере.</h1>
-        <p>Многофайловые проекты, ввод в консоли, turtle canvas и неизменяемые ссылки. Без сервера. Без аккаунтов.</p>
+        <h1>Создавайте, запускайте и делитесь C++‑проектами в браузере.</h1>
+        <p>Настоящий компилятор clang, многофайловые проекты, ввод в консоли и неизменяемые ссылки. Без сервера. Без аккаунтов.</p>
         <div class="hero-actions">
           <button id="new-project" class="btn primary">Новый проект</button>
         </div>
       </div>
       <div class="hero-card">
-        <div class="hero-code-title">hello.py</div>
+        <div class="hero-code-title">hello.cpp</div>
         <pre class="hero-code"><span id="hero-code-text"></span><span class="hero-code-caret" aria-hidden="true"></span></pre>
       </div>
     </section>
@@ -72,9 +71,9 @@
           <div class="logo"><img src="assets/shp-logo.webp" alt="MSHP" /></div>
           <div>
             <div class="brand-title">
-              &#1052;&#1064;&#1055;&#1072;&#1081;&#1090;&#1086;&#1085;.&#1054;&#1085;&#1083;&#1072;&#1081;&#1085;
+              МШПлюсПлюс.Онлайн
             </div>
-            <div class="brand-sub">Web IDE Python</div>
+            <div class="brand-sub">Web IDE C++</div>
           </div>
         </a>
       </div>
@@ -117,14 +116,7 @@
           <div id="file-list" class="file-list"></div>
         </div>
 
-        <!-- 
-          Панель "Ресурсы" временно скрыта.
-          Причина: Skulpt не поддерживает загрузку изображений как форм черепахи.
-          Это архитектурное ограничение Skulpt (в отличие от trinket.io, которая использует 
-          собственный turtle.js модуль). Для полноценной работы нужна переписанная реализация 
-          turtle graphics или обновление Skulpt до версии с поддержкой image shapes.
-          Функционал законсервирован, но код для загрузки ассетов остаётся в JavaScript коде.
-        -->
+        <!-- Панель «Ресурсы» временно скрыта (законсервирована). -->
         <!-- div class="panel" hidden>
           <div class="panel-header">
             <div class="panel-title">Ресурсы</div>
@@ -140,7 +132,7 @@
       <section id="editor-pane" class="editor-pane">
         <div class="editor-toolbar">
           <div class="editor-actions">
-            <button id="run-btn" class="btn primary" title="Запуск (F8 или Alt+R)">Запуск main.py</button>
+            <button id="run-btn" class="btn primary" title="Запуск (F8 или Alt+R)">Запуск main.cpp</button>
             <button id="stop-btn" class="btn danger" disabled title="Остановить (Alt+X)">Стоп</button>
             <div id="run-status" class="run-status">Ожидание</div>
           </div>
