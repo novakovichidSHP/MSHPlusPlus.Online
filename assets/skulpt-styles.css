@@ -28,24 +28,39 @@
 
 :root {
   color-scheme: light;
-  --bg: #f5f9ff;
-  --bg-2: #eaf3ff;
+  /* Палитра по макету ide.html — чистые нейтральные тона (Linear/Vercel-стиль) */
+  --bg: #f6f7f9;
+  --bg-2: #f2f4f7;
   --panel: #ffffff;
-  --panel-2: #eef4ff;
-  --border: #c7d8f2;
-  --text: #0f1f3a;
-  --muted: #5b6b84;
+  --panel-2: #fbfcfd;
+  --panel-3: #f2f4f7;
+  --border: #e7e9ee;
+  --border-strong: #d8dce3;
+  --text: #1a1d24;
+  --muted: #646b78;
+  --faint: #9aa1ad;
   --accent: #1c6bff;
-  --accent-2: #1ab5d8;
-  --snapshot-banner-bg: #e7f7ec;
-  --snapshot-banner-border: #9fdab4;
-  --snapshot-banner-text: #1a5b35;
+  --accent-hover: #1557e0;
+  --accent-2: #20c5e7;
+  --accent-weak: #e9f3ff;
+  --accent-ring: rgba(28, 107, 255, 0.18);
+  --magenta: #e0218a;
+  --magenta-weak: #fdeaf4;
+  --snapshot-banner-bg: #e9f7ef;
+  --snapshot-banner-border: #bfe6cf;
+  --snapshot-banner-text: #0f7a3d;
   --remix-btn-bg: #39c273;
   --remix-btn-bg-hover: #2fb164;
   --remix-btn-border: #2da35d;
   --remix-btn-outline: rgba(57, 194, 115, 0.28);
-  --danger: #e04b4b;
-  --shadow: 0 18px 35px rgba(18, 54, 110, 0.18);
+  --danger: #e5484d;
+  --danger-weak: #fdeced;
+  --green: #16a34a;
+  --green-weak: #e9f7ef;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow: 0 2px 4px rgba(16, 24, 40, 0.04), 0 8px 20px rgba(16, 24, 40, 0.06);
 }
 
 /* Тёмная тема — палитра senior-МШП (deep purple + azure/cyan). Включается data-theme="dark" на <body>. */
@@ -55,11 +70,19 @@ body[data-theme="dark"] {
   --bg-2: #181034;
   --panel: #1b1140;
   --panel-2: #241753;
-  --border: #2f245f;
-  --text: #e9e5ff;
-  --muted: #9b93c9;
-  --accent: #4d8bff;
-  --accent-2: #20c5e7;
+  --panel-3: #271a55;
+  --border: #2c2257;
+  --border-strong: #3a2d6b;
+  --text: #ece8ff;
+  --muted: #a99fd0;
+  --faint: #7a6fa8;
+  --accent: #3b82ff;
+  --accent-hover: #5a97ff;
+  --accent-2: #3ad7f0;
+  --accent-weak: rgba(59, 130, 246, 0.18);
+  --accent-ring: rgba(59, 130, 246, 0.32);
+  --magenta: #ff3da0;
+  --magenta-weak: rgba(255, 61, 160, 0.16);
   --snapshot-banner-bg: #14323a;
   --snapshot-banner-border: #1f6f6a;
   --snapshot-banner-text: #7be3c8;
@@ -67,8 +90,12 @@ body[data-theme="dark"] {
   --remix-btn-bg-hover: #29a05e;
   --remix-btn-border: #248a52;
   --remix-btn-outline: rgba(57, 194, 115, 0.32);
-  --danger: #ff6b6b;
-  --shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  --danger: #ff6b6f;
+  --danger-weak: rgba(255, 107, 111, 0.14);
+  --green: #36d07f;
+  --green-weak: rgba(54, 208, 127, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 /* Кнопка-тумблер темы (иконка луна/солнце) */
@@ -137,7 +164,7 @@ body {
 body {
   margin: 0;
   font-family: "Rubik", sans-serif;
-  background: radial-gradient(circle at top, #d8e9ff 0%, var(--bg) 45%, #f7fbff 100%);
+  background: var(--bg);
   color: var(--text);
   overflow: hidden;
   min-height: 100dvh;
