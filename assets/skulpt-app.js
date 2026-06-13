@@ -544,11 +544,14 @@ function bindUi() {
     window.visualViewport.addEventListener("scroll", applyResponsiveCardState);
   }
 
-  els.consoleSend.addEventListener("click", submitConsoleInput);
+  // Кнопка «Запустить с вводом» и Ctrl/Cmd+Enter — запуск с текущим stdin.
+  // Обычный Enter в поле — перенос строки (многострочный batch-ввод).
+  enableConsoleInput();
+  els.consoleSend.addEventListener("click", () => runActiveFile());
   els.consoleInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      submitConsoleInput();
+      runActiveFile();
     }
   });
 
@@ -2894,9 +2897,10 @@ function updateRunStatus(status) {
   els.runStatus.textContent = RUN_STATUS_LABELS[key] || status;
 }
 
-function enableConsoleInput(enable) {
-  els.consoleInput.disabled = !enable;
-  els.consoleSend.disabled = !enable;
+function enableConsoleInput() {
+  // Поле «Ввод · stdin» (batch) доступно всегда — ввод готовится до запуска.
+  if (els.consoleInput) els.consoleInput.disabled = false;
+  if (els.consoleSend) els.consoleSend.disabled = false;
 }
 
 function setConsoleInputWaiting(waiting) {
@@ -2914,35 +2918,6 @@ function setConsoleInputWaiting(waiting) {
   }
 }
 
-function submitConsoleInput() {
-  const value = els.consoleInput.value;
-  els.consoleInput.value = "";
-  if (!value && !state.stdinWaiting && !state.stdinResolver) {
-    return;
-  }
-  // Split input by lines and process each separately
-  const lines = value.split("\n");
-  lines.forEach((line) => {
-    appendConsole(`${line}\n`, false);
-  });
-  
-  // If waiting for input, deliver the first line
-  if (state.stdinResolver) {
-    const resolver = state.stdinResolver;
-    state.stdinResolver = null;
-    setConsoleInputWaiting(false);
-    resolver(lines[0] || "");
-    // Add remaining lines to queue
-    for (let i = 1; i < lines.length; i++) {
-      state.stdinQueue.push(lines[i]);
-    }
-    return;
-  }
-  // Add all lines to queue
-  lines.forEach((line) => {
-    state.stdinQueue.push(line);
-  });
-}
 
 
 
@@ -3155,10 +3130,12 @@ async function runActiveFile() {
   }
   clearConsole();
 
-  // batch stdin: то, что пользователь заранее ввёл в консоль, отдаём как std::cin.
-  const stdinBuffer = state.stdinQueue.length ? state.stdinQueue.join("\n") + "\n" : "";
-  state.stdinResolver = null;
-  setConsoleInputWaiting(false);
+  // batch stdin: содержимое поля «Ввод · stdin» отдаём целиком в std::cin.
+  // Гарантируем завершающий перевод строки (иначе getline на последней строке зависнет на EOF).
+  let stdinBuffer = els.consoleInput ? els.consoleInput.value : "";
+  if (stdinBuffer && !stdinBuffer.endsWith("\n")) {
+    stdinBuffer += "\n";
+  }
 
   const runToken = state.runToken + 1;
   state.runToken = runToken;
@@ -3217,7 +3194,6 @@ async function runActiveFile() {
   }
 
   els.stopBtn.disabled = true;
-  state.stdinQueue = [];
 }
 
 /**
@@ -3318,7 +3294,7 @@ function hardStop(status = "stopped") {
   setConsoleInputWaiting(false);
   state.stdinResolver = null;
   updateRunStatus(status);
-  enableConsoleInput(false);
+  enableConsoleInput();
   els.stopBtn.disabled = true;
 }
 
