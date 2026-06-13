@@ -43,108 +43,78 @@
 
 
     <section>
-        <article><h1>МШПайтон.Онлайн</h1>
-<p><a href="https://github.com/novakovichid/MSHPython.Online/actions/workflows/tests.yml"><img src="https://github.com/novakovichid/MSHPython.Online/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
-<a href="https://coveralls.io/github/novakovichid/MSHPython.Online?branch=main"><img src="https://coveralls.io/repos/github/novakovichid/MSHPython.Online/badge.svg?branch=main" alt="Coverage Status"></a></p>
-<p>Статус: релизная версия.</p>
-<p>МШПайтон.Онлайн - браузерная Python IDE для учебных задач с поддержкой многофайловых проектов, консоли, Turtle-графики и шаринга по ссылке.</p>
+        <article><h1>МШПлюсПлюс.Онлайн</h1>
+<p><a href="https://github.com/novakovichidSHP/MSHPlusPlus.Online/actions/workflows/tests.yml"><img src="https://github.com/novakovichidSHP/MSHPlusPlus.Online/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+<a href="https://coveralls.io/github/novakovichidSHP/MSHPlusPlus.Online?branch=main"><img src="https://coveralls.io/repos/github/novakovichidSHP/MSHPlusPlus.Online/badge.svg?branch=main" alt="Coverage Status"></a></p>
+<p><strong>Браузерная C++‑IDE для учебных задач.</strong> Компилирует код <strong>настоящим clang</strong> прямо в браузере
+(без сервера и аккаунтов), многофайловые проекты, ввод/вывод в консоли, шеринг по неизменяемой ссылке.</p>
+<p>🔗 <strong>Демо:</strong> https://novakovichidshp.github.io/MSHPlusPlus.Online/</p>
+<p>Это C++‑порт <a href="https://github.com/novakovichid/MSHPython.Online">МШПайтон.Онлайн</a>: сохранены потоки работы,
+хоткеи и шеринг, но рантайм Python/Skulpt заменён на C++‑тулчейн, а UI обновлён под современный стиль.</p>
 <h2>Что умеет IDE</h2>
 <ul>
-<li>Многофайловые проекты (<code>main.py</code> + модули <code>.py</code>).</li>
-<li>Запуск Python-кода прямо в браузере.</li>
-<li>Встроенная Turtle-графика.</li>
-<li>Шеринг проекта через snapshot-ссылку.</li>
-<li>Режим Snapshot:
-<ul>
-<li>локальный черновик изменений;</li>
-<li><code>Сброс</code> для отката к исходному снимку;</li>
-<li><code>Ремикс</code> для сохранения временной копии как постоянного локального проекта.</li>
+<li><strong>Настоящая компиляция C++</strong> в браузере — clang/LLVM, собранный в WebAssembly (<a href="https://github.com/jprendes/emception">emception</a>).
+Язык C++20, полный STL, исключения. Никакого интерпретатора-подмножества.</li>
+<li><strong>Многофайловые проекты</strong> (<code>main.cpp</code> + модули <code>.cpp/.h/.hpp</code>).</li>
+<li><strong>Batch‑ввод (stdin):</strong> поле «Ввод · stdin» заполняется до запуска и целиком отдаётся в <code>std::cin</code>.</li>
+<li><strong>Сегментированная консоль:</strong> отдельные блоки «Компиляция» (команда + результат) и «Вывод программы».</li>
+<li><strong>Кликабельная диагностика:</strong> ошибки clang <code>file:line:col</code> ведут на строку в редакторе.</li>
+<li><strong>Редактор CodeMirror 6</strong> с C++‑подсветкой; настройка размера шрифта, хоткеи.</li>
+<li><strong>Тёмная тема</strong> (тумблер, персист) в фирменной палитре МШП.</li>
+<li><strong>Шеринг</strong> проекта неизменяемой snapshot‑ссылкой; режим Snapshot (черновик · <code>Сброс</code> · <code>Ремикс</code>).</li>
+<li><strong>Импорт/экспорт</strong> проекта (<code>.cpp/.h/.hpp/.zip/.json</code>).</li>
 </ul>
-</li>
-<li>Импорт/экспорт файлов проекта.</li>
+<blockquote>
+<p>Лимиты выполнения: таймаут компиляции/выполнения, ограничение размера вывода и проекта.
+Песочница WASI/emscripten: без сети, потоков и реальной ФС.</p>
+</blockquote>
+<h2>Тулчейн C++</h2>
+<p>Компилятор (~24 МБ движка + sysroot) лежит статикой в <code>toolchain/</code> и раздаётся <strong>с того же origin</strong>, что и
+приложение (требование Web Worker). Первый заход качает <strong>~28 МБ</strong> (движок + нужные sysroot‑библиотеки),
+дальше всё из кэша; повторные компиляции — без обращений к сети. Подробности и API рантайма —
+<a href="assets/cpp-runtime/README.md"><code>assets/cpp-runtime/README.md</code></a>.</p>
+<h2>Быстрый старт</h2>
+<p>Тулчейн должен быть доступен по <code>/toolchain/</code> того же origin (в репозитории он уже лежит).</p>
+<pre class="prettyprint source lang-bash"><code>python3 -m http.server 8000
+# открыть http://127.0.0.1:8000
+</code></pre>
+<h2>Разработка</h2>
+<pre class="prettyprint source lang-bash"><code>npm ci                      # зависимости
+npm test                    # unit-тесты + покрытие (порог в .c8rc.json)
+npm run test:unit           # только unit
+npm run test:unit:coverage  # с отчётом покрытия (text/lcov/cobertura)
+npm run build:cm6           # пересборка бандла CodeMirror 6 (esbuild)
+npm run docs:api            # генерация API-доков (JSDoc → docs/api)
+</code></pre>
+<p>Покрытие unit‑тестируемых модулей — <strong>≈98%</strong> (парсер диагностики, позиции в исходнике,
+команды редактора, утилиты импорта/шеринга).</p>
+<p>CI: GitHub Actions (<a href=".github/workflows/tests.yml"><code>.github/workflows/tests.yml</code></a>) и
+GitLab CI (<a href=".gitlab-ci.yml"><code>.gitlab-ci.yml</code></a>) — unit + coverage + авто‑генерация API‑доков.</p>
+<h2>Структура проекта (основное)</h2>
+<ul>
+<li><code>index.html</code> — интерфейс IDE.</li>
+<li><code>assets/skulpt-app.js</code> — основной frontend‑рантайм приложения.</li>
+<li><code>assets/skulpt-styles.css</code> — стили (палитра/раскладка по макету <code>docs/cpp-port/mockups/ide.html</code>).</li>
+<li><code>assets/cpp-runtime/</code> — движок выполнения C++: фасад <code>cpp-runtime.js</code>, терминируемый <code>exec-worker.js</code>,
+парсер диагностики <code>diagnostics.js</code>, позиции <code>source-position.js</code>, <code>vendor/comlink.min.mjs</code>.</li>
+<li><code>assets/editor-core/</code> — ядро редактора (CM6‑адаптер, движок команд, хоткеи).</li>
+<li><code>assets/utils/*.js</code> — утилиты (recent/import/remix).</li>
+<li><code>assets/vendor/cm6/</code> — собранный бандл CodeMirror 6.</li>
+<li><code>toolchain/</code> — артефакты C++‑тулчейна (emception), раздаются статикой (gitignored по <code>*.gz</code>).</li>
+<li><code>tests/unit/</code> — unit‑тесты; <code>assets/cpp-runtime/*.test.mjs</code> — тесты рантайма.</li>
+<li><code>docs/cpp-port/</code> — исследование, ТЗ, план MVP, спайки, <strong>макеты</strong> (<code>mockups/</code>).</li>
 </ul>
 <h2>Документация</h2>
 <ul>
-<li>Пользовательское руководство (Markdown): <code>docs/USER_GUIDE.md</code></li>
-<li>Техническое руководство: <code>docs/TECHNICAL_GUIDE.md</code></li>
-<li>План системного рефакторинга: <code>docs/REFACTOR_PLAN.md</code></li>
-<li>Runbook архивации legacy editor: <code>docs/LEGACY_ARCHIVE_RUNBOOK.md</code></li>
-<li>HTML-гайды:
-<ul>
-<li>Для пользователей: <code>docs/user_guide/for_users.html</code></li>
-<li>Для преподавателей: <code>docs/user_guide/for_teachers.html</code></li>
-</ul>
-</li>
-</ul>
-<h2>Быстрый старт</h2>
-<h3>Вариант 1: локальный статический сервер</h3>
-<p>Windows:</p>
-<pre class="prettyprint source lang-bash"><code>serve.bat
-</code></pre>
-<p>Linux/macOS:</p>
-<pre class="prettyprint source lang-bash"><code>./serve.sh
-</code></pre>
-<p>macOS (двойной клик/Terminal):</p>
-<pre class="prettyprint source lang-bash"><code>./serve.command
-</code></pre>
-<p>По умолчанию используется порт <code>8000</code>.</p>
-<p>С другим портом:</p>
-<pre class="prettyprint source lang-bash"><code>PORT=9000 ./serve.sh
-</code></pre>
-<h3>Вариант 2: Python вручную</h3>
-<pre class="prettyprint source lang-bash"><code>python3 -m http.server 8000
-</code></pre>
-<p>Откройте в браузере:</p>
-<ul>
-<li><code>http://127.0.0.1:8000</code></li>
-</ul>
-<h2>Разработка</h2>
-<h3>Установка зависимостей</h3>
-<pre class="prettyprint source lang-bash"><code>npm ci
-</code></pre>
-<h3>Unit-тесты</h3>
-<pre class="prettyprint source lang-bash"><code>npm run test:unit
-</code></pre>
-<h3>Unit + coverage</h3>
-<pre class="prettyprint source lang-bash"><code>npm run test:unit:coverage
-</code></pre>
-<h3>E2E (Playwright)</h3>
-<pre class="prettyprint source lang-bash"><code>npx playwright test
-</code></pre>
-<p>E2E в песочнице (Chromium):</p>
-<pre class="prettyprint source lang-bash"><code>npx playwright test -c playwright.sandbox.config.cjs
-</code></pre>
-<p>Полный editor matrix (<code>tests/ide.spec.js</code> + <code>tests/ide.legacy.spec.js</code>) в кросс-браузерной matrix (Chromium/Firefox/WebKit):</p>
-<pre class="prettyprint source lang-bash"><code>npx playwright test -c playwright.editor-matrix.config.cjs tests/ide.spec.js tests/ide.legacy.spec.js
-</code></pre>
-<p>Запуск только snapshot/remix сценариев:</p>
-<pre class="prettyprint source lang-bash"><code>npx playwright test tests/ide.spec.js --grep &quot;remix|snapshot&quot;
-</code></pre>
-<h2>Структура проекта (основное)</h2>
-<ul>
-<li><code>index.html</code> - основной интерфейс.</li>
-<li><code>assets/skulpt-app.js</code> - основной frontend runtime.</li>
-<li><code>assets/skulpt-styles.css</code> - основные стили интерфейса.</li>
-<li><code>assets/editor-core/</code> - shared editor core (adapter factory, CM6 adapter, command engine).</li>
-<li><code>assets/editor-legacy/</code> - legacy-only editor runtime (legacy adapter, keyboard/decorations path).</li>
-<li><code>assets/editor-legacy/legacy-editor.css</code> - isolated legacy-only editor styles.</li>
-<li><code>assets/archive/</code> - архив устаревших/неактуальных артефактов (без подключения в runtime).</li>
-<li><code>assets/utils/*.js</code> - утилиты.</li>
-<li><code>assets/vendor/skulpt/</code> - локальный runtime Skulpt.</li>
-<li><code>tests/ide.spec.js</code> - основной e2e suite (CM6/general flows).</li>
-<li><code>tests/ide.legacy.spec.js</code> - legacy fallback e2e suite (archive-ready boundary).</li>
-<li><code>tests/unit/</code> - unit тесты.</li>
-</ul>
-<h2>Ограничения</h2>
-<ul>
-<li>Для работы нужен HTTP-сервер (протокол <code>file://</code> не поддерживается).</li>
-<li>Snapshot-ссылки ориентированы на код проекта (без вложенных загруженных ассетов).</li>
+<li>Движок C++‑рантайма: <code>assets/cpp-runtime/README.md</code></li>
+<li>Исследование и план порта: <code>docs/cpp-port/</code> (RESEARCH_LOG, ТЗ_переработка, PLAN_MVP, ASYNCIFY_spike)</li>
+<li>API (JSDoc): <code>docs/api/</code></li>
 </ul>
 <h2>Требования</h2>
 <ul>
-<li>Современный Chromium/Chrome/Safari/Firefox.</li>
-<li>Node.js и npm для тестов и dev-процессов.</li>
-<li>Python 3 для запуска локального статического сервера.</li>
+<li>Современный Chromium/Chrome/Firefox/Safari (WebAssembly).</li>
+<li>Node.js + npm — для тестов и сборки.</li>
+<li>Python 3 — для локального статического сервера.</li>
 </ul></article>
     </section>
 
@@ -162,7 +132,7 @@
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Jun 13 2026 22:33:07 GMT+0000 (Coordinated Universal Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Jun 13 2026 22:34:38 GMT+0000 (Coordinated Universal Time)
 </footer>
 
 <script> prettyPrint(); </script>
