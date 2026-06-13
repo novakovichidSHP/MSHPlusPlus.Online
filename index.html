@@ -168,14 +168,17 @@
           </div>
         </div>
         <pre id="console-output" class="console-output"></pre>
-        <div class="stdin-label" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
-          Ввод · stdin
-        </div>
-        <div class="console-input-row">
-          <textarea id="console-input" class="console-input"
-            placeholder="Данные, которые программа прочитает через std::cin (Enter — отправить)" disabled></textarea>
-          <button id="console-send" class="btn small" disabled>Отправить</button>
+        <div class="stdin-row">
+          <div class="stdin-label" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+            Ввод · stdin
+          </div>
+          <textarea id="console-input" class="console-input stdin"
+            placeholder="Данные, которые программа прочитает через std::cin…" disabled></textarea>
+          <div class="stdin-actions">
+            <span class="hint">Передаётся целиком перед запуском</span>
+            <button id="console-send" class="btn small primary" disabled>Отправить</button>
+          </div>
         </div>
       </section>
     </section>

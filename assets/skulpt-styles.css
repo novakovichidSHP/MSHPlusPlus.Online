@@ -1766,7 +1766,15 @@ body[data-theme="dark"] .lang-chip {
   color: #ff9ccb;
 }
 
-/* Метка поля ввода stdin */
+/* Блок ввода stdin — перенос из макета ide.html (.stdin-row) */
+.stdin-row {
+  border-top: 1px solid var(--border);
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel-2);
+}
 .stdin-label {
   display: flex;
   align-items: center;
@@ -1776,10 +1784,36 @@ body[data-theme="dark"] .lang-chip {
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--faint);
-  padding: 10px 14px 0;
 }
 .stdin-label svg {
   display: block;
+}
+.console-input.stdin {
+  flex: none;
+  width: 100%;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  min-height: 48px;
+  resize: none;
+}
+.console-input.stdin:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.stdin-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hint {
+  font-size: 11px;
+  color: var(--faint);
 }
 
 /* Заголовки панелей — компактные uppercase (как в макете) */
@@ -1841,4 +1875,28 @@ body[data-theme="dark"] .lang-chip {
 .panel-header,
 .tabs {
   background: var(--panel);
+}
+
+/* ===== V-restyle 4: сегментированная консоль (перенос из макета ide.html) ===== */
+.seg {
+  margin-bottom: 11px;
+}
+.seg-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+  font-family: "Rubik", sans-serif;
+}
+.c-prompt {
+  color: var(--accent);
+  font-weight: 500;
+}
+.c-ok {
+  color: var(--green);
+}
+.c-dim {
+  color: var(--faint);
 }

@@ -34,8 +34,8 @@ const MOBILE_ACTION_LABELS = {
   export: "⬆️",
   import: "⬇️"
 };
-const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Введите input и нажмите Enter (Shift+Enter для новой строки)";
-const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Введите input и нажмите «Отправить»";
+const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Данные, которые программа прочитает через std::cin…";
+const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Данные для std::cin…";
 
 const VALID_FILENAME = /^[A-Za-z0-9._\-\u0400-\u04FF]+$/;
 // \u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u043E\u0432 C++ (\u0435\u0434\u0438\u043D\u0438\u0446\u044B \u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 + \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438). \u0418\u043C\u044F \u0431\u0435\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u2192 .cpp.
@@ -437,6 +437,8 @@ async function init() {
   initEditorAdapter();
   applyTheme(getStoredTheme());
   loadSettings();
+  // Раскладка по макету: консоль справа (3 колонки) по умолчанию.
+  setConsoleLayout(safeLocalGet("shp-console-right") !== "false");
   /**
    * Binds all UI event handlers: buttons, hotkeys, editor, file list, etc.
    * Must be called before any UI interactions.
@@ -2831,6 +2833,25 @@ function clearConsole() {
   state.outputBytes = 0;
 }
 
+/** Метка сегмента консоли (КОМПИЛЯЦИЯ / ВЫВОД ПРОГРАММЫ) — как в макете. */
+function appendConsoleLabel(text) {
+  const label = document.createElement("div");
+  label.className = "seg-label";
+  label.textContent = text;
+  els.consoleOutput.appendChild(label);
+  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
+}
+
+/** Строка консоли в стиле макета (.c-prompt / .c-ok / .c-dim). */
+function appendConsoleStyled(text, className) {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = String(text ?? "");
+  els.consoleOutput.appendChild(span);
+  els.consoleOutput.appendChild(document.createElement("br"));
+  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
+}
+
 function appendConsole(text, isError) {
   if (state.outputBytes >= CONFIG.MAX_OUTPUT_BYTES) {
     return;
@@ -3083,6 +3104,7 @@ function setConsoleLayout(right) {
   }
   const next = Boolean(right);
   els.workspace.classList.toggle("console-right", next);
+  safeLocalSet("shp-console-right", String(next));
   if (els.consoleLayoutToggle) {
     els.consoleLayoutToggle.textContent = next ? "Консоль снизу" : "Консоль справа";
     els.consoleLayoutToggle.setAttribute("aria-pressed", String(next));
@@ -3162,6 +3184,7 @@ async function runActiveFile() {
   }
 
   // --- Выполнение ---
+  appendConsoleLabel("Вывод программы");
   updateRunStatus("running");
   let runResult;
   try {
@@ -3185,9 +3208,8 @@ async function runActiveFile() {
     appendConsole(`\n${runResult.error}\n`, true);
     updateRunStatus("error");
   } else {
-    if (runResult.exitCode && runResult.exitCode !== 0) {
-      appendConsole(`\n[программа завершилась с кодом ${runResult.exitCode}]\n`, true);
-    }
+    appendConsoleStyled(`Программа завершена с кодом ${runResult.exitCode ?? 0}`,
+      runResult.exitCode ? "console-error" : "c-dim");
     updateRunStatus("done");
   }
   if (runResult.truncated) {
@@ -3207,16 +3229,24 @@ function printCompileDiagnostics(result) {
   const items = (diagnostics.items || []).filter(
     (item) => item.severity === "error" || item.severity === "warning"
   );
+  const secs = ((result && result.durationMs ? result.durationMs : 0) / 1000).toFixed(1);
+
+  // Сегмент «Компиляция» (как в макете): команда + результат.
+  appendConsoleLabel("Компиляция");
+  appendConsoleStyled("$ clang++ -std=c++20 -O2 main.cpp", "c-prompt");
+
   if (result && result.ok) {
-    if (diagnostics.counts && diagnostics.counts.warning) {
-      appendConsole(`${result.summary}\n`, false);
-      for (const item of items) {
-        appendDiagnosticLine(item);
-      }
+    const warn = (diagnostics.counts && diagnostics.counts.warning) || 0;
+    appendConsoleStyled(
+      `✓ Сборка успешна · ${secs} с` + (warn ? `, предупреждений: ${warn}` : ""),
+      "c-ok"
+    );
+    for (const item of items) {
+      appendDiagnosticLine(item);
     }
     return;
   }
-  appendConsole("Ошибка компиляции:\n", true);
+  appendConsoleStyled(`✗ Ошибка компиляции · ${secs} с`, "console-error");
   for (const item of items) {
     appendDiagnosticLine(item);
   }
