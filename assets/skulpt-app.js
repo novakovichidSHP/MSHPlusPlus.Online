@@ -2,13 +2,7 @@ import { gzipSync, gunzipSync, unzipSync } from "./skulpt-fflate.esm.js";
 import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
-import { createEditorAdapter } from "./editor-core/editor-adapter-factory.js";
-import {
-  DEFAULT_EDITOR_MODE,
-  EDITOR_MODE_STORAGE_KEY,
-  normalizeEditorMode,
-  resolveEditorMode
-} from "./utils/editor-mode-utils.js";
+import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
 import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 
@@ -117,7 +111,6 @@ const IMAGE_ASSET_EXTENSIONS = new Set([
 const state = {
   db: null,
   mode: "landing",
-  editorMode: DEFAULT_EDITOR_MODE,
   editorAdapter: null,
   uiCard: "editor",
   project: null,
@@ -183,7 +176,6 @@ const els = {
   wrapBtn: document.getElementById("wrap-btn"),
   fontDecBtn: document.getElementById("font-dec-btn"),
   fontIncBtn: document.getElementById("font-inc-btn"),
-  editorModeToggle: document.getElementById("editor-mode-toggle"),
   hotkeysBtn: document.getElementById("hotkeys-btn"),
   sidebar: document.getElementById("sidebar"),
   editorPane: document.getElementById("editor-pane"),
@@ -359,14 +351,6 @@ function toggleTheme() {
   applyTheme(next);
 }
 
-function loadEditorMode() {
-  return normalizeEditorMode(safeLocalGet(EDITOR_MODE_STORAGE_KEY), DEFAULT_EDITOR_MODE);
-}
-
-function saveEditorMode(mode) {
-  return safeLocalSet(EDITOR_MODE_STORAGE_KEY, normalizeEditorMode(mode, DEFAULT_EDITOR_MODE));
-}
-
 function getEditorValue() {
   if (state.editorAdapter) {
     return state.editorAdapter.getValue();
@@ -401,18 +385,7 @@ function callEditorAdapterMethod(method, ...args) {
   return state.editorAdapter[method](...args);
 }
 
-function updateEditorModeToggleLabel() {
-  if (!els.editorModeToggle) {
-    return;
-  }
-  const label = state.editorMode === "cm6" ? "Редактор: CM6" : "Редактор: Legacy";
-  els.editorModeToggle.textContent = label;
-  els.editorModeToggle.setAttribute("aria-label", label);
-  els.editorModeToggle.setAttribute("aria-pressed", state.editorMode === "legacy" ? "true" : "false");
-}
-
-function initEditorAdapter(mode, { preserve = false } = {}) {
-  const nextMode = normalizeEditorMode(mode, DEFAULT_EDITOR_MODE);
+function initEditorAdapter({ preserve = false } = {}) {
   const preservedValue = preserve && state.editorAdapter
     ? state.editorAdapter.getValue()
     : getEditorValue();
@@ -429,8 +402,7 @@ function initEditorAdapter(mode, { preserve = false } = {}) {
     state.editorAdapter = null;
   }
 
-  state.editorMode = nextMode;
-  state.editorAdapter = createEditorAdapter(nextMode, {
+  state.editorAdapter = createCm6EditorAdapter({
     editor: els.editor,
     editorStack: els.editorStack,
     editorWrap: els.editorWrap,
@@ -445,37 +417,6 @@ function initEditorAdapter(mode, { preserve = false } = {}) {
   state.editorAdapter.setSelection(preservedSelection);
   state.editorAdapter.setScroll(preservedScroll);
   callEditorAdapterMethod("setTheme", currentTheme());
-  updateEditorModeToggleLabel();
-}
-
-function switchEditorMode(mode, { persist = true, showMessage = true } = {}) {
-  const nextMode = normalizeEditorMode(mode, DEFAULT_EDITOR_MODE);
-  if (state.editorAdapter && state.editorMode === nextMode) {
-    if (persist) {
-      saveEditorMode(nextMode);
-    }
-    updateEditorModeToggleLabel();
-    return;
-  }
-  initEditorAdapter(nextMode, { preserve: true });
-  if (persist) {
-    saveEditorMode(nextMode);
-  }
-  applyEditorSettings();
-  refreshEditorDecorations();
-  syncEditorScroll();
-  if (showMessage) {
-    showToast(nextMode === "cm6" ? "Активирован редактор CM6." : "Активирован Legacy-редактор.");
-  }
-}
-
-function applyEditorModeFromQuery(query) {
-  const nextMode = resolveEditorMode(query, loadEditorMode(), DEFAULT_EDITOR_MODE);
-  if (!state.editorAdapter || state.editorMode !== nextMode) {
-    switchEditorMode(nextMode, { persist: false, showMessage: false });
-  } else {
-    updateEditorModeToggleLabel();
-  }
 }
 
 init();
@@ -493,8 +434,7 @@ async function init() {
   if (!state.db) {
     showToast("Storage fallback: changes will not persist in this browser.");
   }
-  state.editorMode = loadEditorMode();
-  initEditorAdapter(state.editorMode);
+  initEditorAdapter();
   applyTheme(getStoredTheme());
   loadSettings();
   /**
@@ -564,12 +504,6 @@ function bindUi() {
   }
   if (els.fontIncBtn) {
     els.fontIncBtn.addEventListener("click", () => changeEditorFontSize(EDITOR_FONT_STEP));
-  }
-  if (els.editorModeToggle) {
-    els.editorModeToggle.addEventListener("click", () => {
-      const nextMode = state.editorMode === "cm6" ? "legacy" : "cm6";
-      switchEditorMode(nextMode, { persist: true, showMessage: true });
-    });
   }
   if (els.hotkeysBtn) {
     els.hotkeysBtn.addEventListener("click", showHotkeysModal);
@@ -927,9 +861,7 @@ function showView(view) {
  * @returns {Promise<void>}
  */
 async function router() {
-  const { route, id, query } = parseHash();
-  const routeQuery = query || new URLSearchParams();
-  applyEditorModeFromQuery(routeQuery);
+  const { route, id } = parseHash();
   if (route === "landing") {
     showView("landing");
     await renderRecent();
