@@ -36,3 +36,8 @@ test("offsetToLineCol: обратное преобразование согла�
 test("offsetToLineCol: offset 0 → строка 1 колонка 1", () => {
   assert.deepEqual(offsetToLineCol(SRC, 0), { line: 1, col: 1 });
 });
+
+test("обрабатывает null/undefined вход", () => {
+  assert.equal(lineColToOffset(null, 1, 1), 0);
+  assert.deepEqual(offsetToLineCol(undefined, 5), { line: 1, col: 1 });
+});

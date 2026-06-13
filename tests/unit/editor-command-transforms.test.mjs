@@ -75,3 +75,55 @@ test("select line selects full line boundaries", () => {
     end: source.indexOf("beta") + "beta".length
   });
 });
+
+test("enter continues existing indentation without colon", () => {
+  const source = "  x = 1";
+  const result = apply(EDITOR_COMMANDS.ENTER, source, { start: source.length, end: source.length }, { tabSize: 4 });
+  assert.equal(result.handled, true);
+  assert.equal(result.value, "  x = 1\n  ");
+});
+
+test("toggle comment on empty line is a no-op", () => {
+  const result = apply(EDITOR_COMMANDS.TOGGLE_COMMENT, "   ", { start: 1, end: 1 });
+  assert.equal(result.handled, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.value, "   ");
+});
+
+test("move line down swaps with the next line", () => {
+  const source = "a\nb\nc";
+  const result = apply(EDITOR_COMMANDS.MOVE_LINE_DOWN, source, { start: 0, end: 0 });
+  assert.equal(result.changed, true);
+  assert.equal(result.value, "b\na\nc");
+});
+
+test("move line up at top is a no-op", () => {
+  const source = "first\nsecond";
+  const result = apply(EDITOR_COMMANDS.MOVE_LINE_UP, source, { start: 1, end: 1 });
+  assert.equal(result.handled, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.value, source);
+});
+
+test("delete line on the only line leaves an empty document", () => {
+  const result = apply(EDITOR_COMMANDS.DELETE_LINE, "solo", { start: 2, end: 2 });
+  assert.equal(result.value, "");
+  assert.equal(result.selection.start, 0);
+});
+
+test("tab with a selection replaces the selected text", () => {
+  const result = apply(EDITOR_COMMANDS.TAB, "abcd", { start: 1, end: 3 }, { tabSize: 2 });
+  assert.equal(result.value, "a  d");
+  assert.equal(result.valueChanged, true);
+});
+
+test("unknown command is not handled", () => {
+  const result = apply("__nope__", "x", { start: 0, end: 0 });
+  assert.equal(result.handled, false);
+  assert.equal(result.value, "x");
+});
+
+test("applyEditorCommand tolerates missing editorState", () => {
+  const result = applyEditorCommand(EDITOR_COMMANDS.SELECT_LINE, null);
+  assert.equal(result.handled, true);
+});

@@ -52,3 +52,12 @@ test("summarize: успех / ошибки / предупреждения", () =
     "Ошибок: 1, предупреждений: 1"
   );
 });
+
+test("парсер не падает на null/undefined", () => {
+  assert.equal(parseDiagnostics(null).items.length, 0);
+  assert.equal(parseDiagnostics(undefined).counts.error, 0);
+});
+
+test("summarize: только ошибки (без предупреждений)", () => {
+  assert.equal(summarizeDiagnostics(parseDiagnostics("main.cpp:1:1: error: e")), "Ошибок: 1");
+});
