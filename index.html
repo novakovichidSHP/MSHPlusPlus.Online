@@ -12,8 +12,6 @@
 </head>
 
 <body>
-  <div class="ambient"></div>
-  <div class="noise"></div>
 
   <div id="guard" class="guard" role="dialog" aria-modal="true">
     <div class="guard-card">
@@ -92,11 +90,11 @@
         <div id="snapshot-banner" class="snapshot-banner hidden">Это временная копия открытого по ссылке проекта. Чтобы сохранить проект локально, нажми "Ремикс"</div>
         <div class="top-actions">
           <button id="theme-toggle" class="btn ghost theme-toggle" title="Переключить тему (светлая/тёмная)" aria-label="Переключить тему"></button>
-          <button id="share-btn" class="btn ghost">Поделиться ссылкой</button>
-          <button id="export-btn" class="btn ghost">Экспорт файлов</button>
-          <button id="import-btn" class="btn ghost">Импорт файлов</button>
-          <button id="remix-btn" class="btn ghost">Ремикс</button>
-          <button id="reset-btn" class="btn ghost">Сброс</button>
+          <button id="share-btn" class="btn ghost"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>Поделиться</button>
+          <button id="export-btn" class="btn ghost">Экспорт</button>
+          <button id="import-btn" class="btn ghost">Импорт</button>
+          <button id="remix-btn" class="btn remix">Ремикс</button>
+          <button id="reset-btn" class="btn ghost danger">Сброс</button>
         </div>
       </div>
     </header>
@@ -132,8 +130,8 @@
       <section id="editor-pane" class="editor-pane">
         <div class="editor-toolbar">
           <div class="editor-actions">
-            <button id="run-btn" class="btn primary" title="Запуск (F8 или Alt+R)">Запуск main.cpp</button>
-            <button id="stop-btn" class="btn danger" disabled title="Остановить (Alt+X)">Стоп</button>
+            <button id="run-btn" class="btn primary" title="Запуск (F8 или Alt+R)"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg>Запуск main.cpp</button>
+            <button id="stop-btn" class="btn danger" disabled title="Остановить (Alt+X)"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Стоп</button>
             <div id="run-status" class="run-status">Ожидание</div>
           </div>
           <div class="editor-controls">

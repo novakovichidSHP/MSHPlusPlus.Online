@@ -1255,9 +1255,15 @@ function renderFiles(files) {
   files.forEach((file) => {
     const item = document.createElement("div");
     item.className = "file-item" + (file.name === state.activeFile ? " active" : "");
-    const label = document.createElement("span");
-    label.textContent = file.name;
-    item.appendChild(label);
+    const dot = String(file.name).lastIndexOf(".");
+    const base = dot > 0 ? file.name.slice(0, dot) : file.name;
+    const ext = dot > 0 ? file.name.slice(dot) : "";
+    item.innerHTML =
+      '<svg class="file-ico" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>' +
+      '<span class="file-name"></span><span class="file-ext"></span>';
+    item.querySelector(".file-name").textContent = base;
+    item.querySelector(".file-ext").textContent = ext;
     item.addEventListener("click", () => setActiveFile(file.name));
     els.fileList.appendChild(item);
   });
@@ -2895,6 +2901,7 @@ function appendConsoleText(target, text) {
 function updateRunStatus(status) {
   const key = String(status || "").toLowerCase();
   els.runStatus.textContent = RUN_STATUS_LABELS[key] || status;
+  els.runStatus.dataset.state = key; // цвет пилюли по состоянию (CSS)
 }
 
 function enableConsoleInput() {
