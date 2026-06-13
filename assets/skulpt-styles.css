@@ -1799,3 +1799,46 @@ body[data-theme="dark"] .lang-chip {
   padding: 3px 9px;
   border-radius: 20px;
 }
+
+/* ===== V-restyle 3: плоские full-bleed панели по макету ide.html ===== */
+/* Грид без отступов; тонкие хайрлайны между панелями через gap+фон */
+.workspace {
+  gap: 1px;
+  padding: 0;
+  background: var(--border);
+}
+.panel,
+.editor-pane,
+.console-pane {
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  background: var(--panel);
+}
+.sidebar {
+  gap: 1px;
+  background: var(--border);
+}
+/* Плоский список файлов (как в макете: без карточек, hover/active-подсветка) */
+.file-item,
+.asset-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.file-item:hover,
+.asset-item:hover {
+  background: var(--panel-3);
+}
+.file-item.active,
+.asset-item.active {
+  background: var(--accent-weak);
+  border-color: transparent;
+  color: var(--accent);
+}
+/* Тулбары/шапки — на surface, компактнее */
+.editor-toolbar,
+.panel-header,
+.tabs {
+  background: var(--panel);
+}
