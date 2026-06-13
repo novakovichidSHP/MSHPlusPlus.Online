@@ -1,6 +1,6 @@
 {
   "all": false,
-  "reporter": ["text", "lcov"],
+  "reporter": ["text", "lcov", "cobertura"],
   "check-coverage": true,
   "statements": 95,
   "lines": 95,
