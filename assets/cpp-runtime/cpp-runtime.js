@@ -36,6 +36,7 @@ export const DEFAULTS = {
   ],
   compileTimeoutMs: 30000,
   runTimeoutMs: 60000,
+  initTimeoutMs: 120000,
   maxOutputBytes: 2_000_000,
   // Лимиты проекта (зеркало CONFIG основного приложения).
   maxFiles: 30,
@@ -95,6 +96,19 @@ class CppRuntime {
     this._worker = new Worker(workerUrl);
     this._emception = Comlink.wrap(this._worker);
 
+    // Если воркер не загрузился (404 / ошибка скрипта) — не висим вечно на
+    // «Загрузка компилятора…», а падаем с понятной ошибкой. Главный кейс:
+    // тулчейн не развёрнут на origin (см. README, раздел про хостинг).
+    const workerFailed = new Promise((_, reject) => {
+      this._worker.addEventListener("error", () => {
+        reject(new CppRuntimeError(
+          `Не удалось загрузить компилятор (${workerUrl.href}). ` +
+          `Тулчейн должен быть размещён на том же origin — см. assets/cpp-runtime/README.md.`,
+          "TOOLCHAIN_UNAVAILABLE"
+        ));
+      });
+    });
+
     // Диагностика компилятора стекается в буфер (em++ пишет в оба потока).
     // emception отдаёт текст по-строчно, но без гарантии завершающего \n →
     // нормализуем перенос на каждый чанк, иначе строки clang склеиваются и
@@ -104,13 +118,26 @@ class CppRuntime {
       const text = String(chunk ?? "");
       this._diagBuffer += text.endsWith("\n") ? text : text + "\n";
     });
-    await (this._emception.onstdout = sink);
-    await (this._emception.onstderr = sink);
 
-    report("toolchain", "Загрузка тулчейна…");
-    await this._emception.init();
-    report("ready", "Готово");
-    return this;
+    const sequence = (async () => {
+      await (this._emception.onstdout = sink);
+      await (this._emception.onstderr = sink);
+      report("toolchain", "Загрузка тулчейна…");
+      await this._emception.init();
+      report("ready", "Готово");
+      return this;
+    })();
+
+    // Backstop-таймаут: тулчейн весит десятки МБ, но если за initTimeoutMs
+    // ничего не пришло — тоже показываем ошибку, а не бесконечную загрузку.
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new CppRuntimeError(
+        "Таймаут загрузки компилятора. Проверьте доступность тулчейна и сеть.",
+        "TOOLCHAIN_TIMEOUT"
+      )), this.options.initTimeoutMs);
+    });
+
+    return Promise.race([sequence, workerFailed, timeout]);
   }
 
   /**
