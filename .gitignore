@@ -15,8 +15,9 @@ build/
 tmp/
 temp/
 
-# C++ toolchain (emception artifacts, ~25 МБ runtime / hosted separately, см. assets/cpp-runtime/README.md)
-/toolchain/
+# C++ toolchain (emception): raw-артефакты деплоятся на Pages (/toolchain/).
+# gzip-дубли воркером не используются (фетчит raw) — их не коммитим.
+toolchain/**/*.gz
 
 # Logs
 *.log
