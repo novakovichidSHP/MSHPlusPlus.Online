@@ -1,140 +1,87 @@
-# МШПайтон.Онлайн
+# МШПлюсПлюс.Онлайн
 
-[![Tests](https://github.com/novakovichid/MSHPython.Online/actions/workflows/tests.yml/badge.svg)](https://github.com/novakovichid/MSHPython.Online/actions/workflows/tests.yml)
-[![Coverage Status](https://coveralls.io/repos/github/novakovichid/MSHPython.Online/badge.svg?branch=main)](https://coveralls.io/github/novakovichid/MSHPython.Online?branch=main)
+[![Tests](https://github.com/novakovichidSHP/MSHPlusPlus.Online/actions/workflows/tests.yml/badge.svg)](https://github.com/novakovichidSHP/MSHPlusPlus.Online/actions/workflows/tests.yml)
+[![Coverage Status](https://coveralls.io/repos/github/novakovichidSHP/MSHPlusPlus.Online/badge.svg?branch=main)](https://coveralls.io/github/novakovichidSHP/MSHPlusPlus.Online?branch=main)
 
-Статус: релизная версия.
+**Браузерная C++‑IDE для учебных задач.** Компилирует код **настоящим clang** прямо в браузере
+(без сервера и аккаунтов), многофайловые проекты, ввод/вывод в консоли, шеринг по неизменяемой ссылке.
 
-МШПайтон.Онлайн - браузерная Python IDE для учебных задач с поддержкой многофайловых проектов, консоли, Turtle-графики и шаринга по ссылке.
+🔗 **Демо:** https://novakovichidshp.github.io/MSHPlusPlus.Online/
+
+Это C++‑порт [МШПайтон.Онлайн](https://github.com/novakovichid/MSHPython.Online): сохранены потоки работы,
+хоткеи и шеринг, но рантайм Python/Skulpt заменён на C++‑тулчейн, а UI обновлён под современный стиль.
 
 ## Что умеет IDE
 
-- Многофайловые проекты (`main.py` + модули `.py`).
-- Запуск Python-кода прямо в браузере.
-- Встроенная Turtle-графика.
-- Шеринг проекта через snapshot-ссылку.
-- Режим Snapshot:
-  - локальный черновик изменений;
-  - `Сброс` для отката к исходному снимку;
-  - `Ремикс` для сохранения временной копии как постоянного локального проекта.
-- Импорт/экспорт файлов проекта.
+- **Настоящая компиляция C++** в браузере — clang/LLVM, собранный в WebAssembly ([emception](https://github.com/jprendes/emception)).
+  Язык C++20, полный STL, исключения. Никакого интерпретатора-подмножества.
+- **Многофайловые проекты** (`main.cpp` + модули `.cpp/.h/.hpp`).
+- **Batch‑ввод (stdin):** поле «Ввод · stdin» заполняется до запуска и целиком отдаётся в `std::cin`.
+- **Сегментированная консоль:** отдельные блоки «Компиляция» (команда + результат) и «Вывод программы».
+- **Кликабельная диагностика:** ошибки clang `file:line:col` ведут на строку в редакторе.
+- **Редактор CodeMirror 6** с C++‑подсветкой; настройка размера шрифта, хоткеи.
+- **Тёмная тема** (тумблер, персист) в фирменной палитре МШП.
+- **Шеринг** проекта неизменяемой snapshot‑ссылкой; режим Snapshot (черновик · `Сброс` · `Ремикс`).
+- **Импорт/экспорт** проекта (`.cpp/.h/.hpp/.zip/.json`).
 
-## Документация
+> Лимиты выполнения: таймаут компиляции/выполнения, ограничение размера вывода и проекта.
+> Песочница WASI/emscripten: без сети, потоков и реальной ФС.
 
-- Пользовательское руководство (Markdown): `docs/USER_GUIDE.md`
-- Техническое руководство: `docs/TECHNICAL_GUIDE.md`
-- План системного рефакторинга: `docs/REFACTOR_PLAN.md`
-- Runbook архивации legacy editor: `docs/LEGACY_ARCHIVE_RUNBOOK.md`
-- HTML-гайды:
-  - Для пользователей: `docs/user_guide/for_users.html`
-  - Для преподавателей: `docs/user_guide/for_teachers.html`
+## Тулчейн C++
+
+Компилятор (~24 МБ движка + sysroot) лежит статикой в `toolchain/` и раздаётся **с того же origin**, что и
+приложение (требование Web Worker). Первый заход качает **~28 МБ** (движок + нужные sysroot‑библиотеки),
+дальше всё из кэша; повторные компиляции — без обращений к сети. Подробности и API рантайма —
+[`assets/cpp-runtime/README.md`](assets/cpp-runtime/README.md).
 
 ## Быстрый старт
 
-### Вариант 1: локальный статический сервер
-
-Windows:
-
-```bash
-serve.bat
-```
-
-Linux/macOS:
-
-```bash
-./serve.sh
-```
-
-macOS (двойной клик/Terminal):
-
-```bash
-./serve.command
-```
-
-По умолчанию используется порт `8000`.
-
-С другим портом:
-
-```bash
-PORT=9000 ./serve.sh
-```
-
-### Вариант 2: Python вручную
+Тулчейн должен быть доступен по `/toolchain/` того же origin (в репозитории он уже лежит).
 
 ```bash
 python3 -m http.server 8000
+# открыть http://127.0.0.1:8000
 ```
-
-Откройте в браузере:
-
-- `http://127.0.0.1:8000`
 
 ## Разработка
 
-### Установка зависимостей
-
 ```bash
-npm ci
+npm ci                      # зависимости
+npm test                    # unit-тесты + покрытие (порог в .c8rc.json)
+npm run test:unit           # только unit
+npm run test:unit:coverage  # с отчётом покрытия (text/lcov/cobertura)
+npm run build:cm6           # пересборка бандла CodeMirror 6 (esbuild)
+npm run docs:api            # генерация API-доков (JSDoc → docs/api)
 ```
 
-### Unit-тесты
+Покрытие unit‑тестируемых модулей — **≈98%** (парсер диагностики, позиции в исходнике,
+команды редактора, утилиты импорта/шеринга).
 
-```bash
-npm run test:unit
-```
-
-### Unit + coverage
-
-```bash
-npm run test:unit:coverage
-```
-
-### E2E (Playwright)
-
-```bash
-npx playwright test
-```
-
-E2E в песочнице (Chromium):
-
-```bash
-npx playwright test -c playwright.sandbox.config.cjs
-```
-
-Полный editor matrix (`tests/ide.spec.js` + `tests/ide.legacy.spec.js`) в кросс-браузерной matrix (Chromium/Firefox/WebKit):
-
-```bash
-npx playwright test -c playwright.editor-matrix.config.cjs tests/ide.spec.js tests/ide.legacy.spec.js
-```
-
-Запуск только snapshot/remix сценариев:
-
-```bash
-npx playwright test tests/ide.spec.js --grep "remix|snapshot"
-```
+CI: GitHub Actions ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) и
+GitLab CI ([`.gitlab-ci.yml`](.gitlab-ci.yml)) — unit + coverage + авто‑генерация API‑доков.
 
 ## Структура проекта (основное)
 
-- `index.html` - основной интерфейс.
-- `assets/skulpt-app.js` - основной frontend runtime.
-- `assets/skulpt-styles.css` - основные стили интерфейса.
-- `assets/editor-core/` - shared editor core (adapter factory, CM6 adapter, command engine).
-- `assets/editor-legacy/` - legacy-only editor runtime (legacy adapter, keyboard/decorations path).
-- `assets/editor-legacy/legacy-editor.css` - isolated legacy-only editor styles.
-- `assets/archive/` - архив устаревших/неактуальных артефактов (без подключения в runtime).
-- `assets/utils/*.js` - утилиты.
-- `assets/vendor/skulpt/` - локальный runtime Skulpt.
-- `tests/ide.spec.js` - основной e2e suite (CM6/general flows).
-- `tests/ide.legacy.spec.js` - legacy fallback e2e suite (archive-ready boundary).
-- `tests/unit/` - unit тесты.
+- `index.html` — интерфейс IDE.
+- `assets/skulpt-app.js` — основной frontend‑рантайм приложения.
+- `assets/skulpt-styles.css` — стили (палитра/раскладка по макету `docs/cpp-port/mockups/ide.html`).
+- `assets/cpp-runtime/` — движок выполнения C++: фасад `cpp-runtime.js`, терминируемый `exec-worker.js`,
+  парсер диагностики `diagnostics.js`, позиции `source-position.js`, `vendor/comlink.min.mjs`.
+- `assets/editor-core/` — ядро редактора (CM6‑адаптер, движок команд, хоткеи).
+- `assets/utils/*.js` — утилиты (recent/import/remix).
+- `assets/vendor/cm6/` — собранный бандл CodeMirror 6.
+- `toolchain/` — артефакты C++‑тулчейна (emception), раздаются статикой (gitignored по `*.gz`).
+- `tests/unit/` — unit‑тесты; `assets/cpp-runtime/*.test.mjs` — тесты рантайма.
+- `docs/cpp-port/` — исследование, ТЗ, план MVP, спайки, **макеты** (`mockups/`).
 
-## Ограничения
+## Документация
 
-- Для работы нужен HTTP-сервер (протокол `file://` не поддерживается).
-- Snapshot-ссылки ориентированы на код проекта (без вложенных загруженных ассетов).
+- Движок C++‑рантайма: `assets/cpp-runtime/README.md`
+- Исследование и план порта: `docs/cpp-port/` (RESEARCH_LOG, ТЗ_переработка, PLAN_MVP, ASYNCIFY_spike)
+- API (JSDoc): `docs/api/`
 
 ## Требования
 
-- Современный Chromium/Chrome/Safari/Firefox.
-- Node.js и npm для тестов и dev-процессов.
-- Python 3 для запуска локального статического сервера.
+- Современный Chromium/Chrome/Firefox/Safari (WebAssembly).
+- Node.js + npm — для тестов и сборки.
+- Python 3 — для локального статического сервера.
