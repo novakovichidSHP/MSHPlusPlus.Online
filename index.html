@@ -171,11 +171,10 @@
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
             Ввод · stdin
           </div>
-          <textarea id="console-input" class="console-input stdin"
-            placeholder="Данные, которые программа прочитает через std::cin…"></textarea>
+          <textarea id="console-input" class="console-input stdin" rows="1"
+            placeholder="Программа запросит ввод — введите строку и нажмите Enter…"></textarea>
           <div class="stdin-actions">
-            <span class="hint">Передаётся целиком перед запуском</span>
-            <button id="console-send" class="btn small primary">Запустить с вводом</button>
+            <span class="hint">Enter — отправить строку программе · Shift+Enter — перенос</span>
           </div>
         </div>
       </section>
@@ -189,7 +188,7 @@
       title="Перезапустить IDE с очисткой кеша">Перезапуск IDE</button>
   </main>
 
-  <script type="module" src="assets/skulpt-app.js?v=2"></script>
+  <script type="module" src="assets/skulpt-app.js?v=6"></script>
 </body>
 
 </html>

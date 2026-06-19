@@ -28,13 +28,17 @@ export const DEFAULTS = {
   // Язык — C++20; библиотека — по факту тулчейна (см. ТЗ).
   flags: ["-O2", "-std=c++20", "-fexceptions"],
   // Технические флаги модуля (не показываются пользователю).
+  // -sASYNCIFY — для интерактивного std::cin: программа приостанавливается на чтении,
+  // пока пользователь не введёт данные (см. __cppio.cpp / inlib.js ниже).
   moduleFlags: [
     "-sSINGLE_FILE=1",
     "-sMODULARIZE=1",
     "-sEXPORT_NAME=createCppModule",
-    "-sEXIT_RUNTIME=1"
+    "-sEXIT_RUNTIME=1",
+    "-sASYNCIFY=1",
+    "--js-library", "/working/__cppio_lib.js"
   ],
-  compileTimeoutMs: 30000,
+  compileTimeoutMs: 45000,
   runTimeoutMs: 60000,
   initTimeoutMs: 120000,
   maxOutputBytes: 2_000_000,
@@ -45,6 +49,65 @@ export const DEFAULTS = {
 };
 
 const SOURCE_RE = /\.(cpp|cc|cxx|c\+\+|c)$/i;
+
+// --- Интерактивный ввод std::cin (Asyncify) ---
+// Доп. единица трансляции: подменяет буфер std::cin на async-streambuf ДО main
+// (глобальный инициализатор; <iostream> в этой же TU гарантирует, что cin уже создан).
+const CPPIO_SRC = `#include <iostream>
+#include <streambuf>
+#include <emscripten.h>
+extern "C" int __cpp_input_ready();
+extern "C" int __cpp_get_char();
+extern "C" void __cpp_out_write(const char*, int);
+namespace {
+  class AsyncInBuf : public std::streambuf {
+    char ch;
+  protected:
+    int underflow() override {
+      // Пока ввода нет — приостанавливаем программу через emscripten_sleep
+      // (каноничный примитив Asyncify): JS успевает получить ввод пользователя.
+      while (!__cpp_input_ready()) {
+        emscripten_sleep(15);
+      }
+      int r = __cpp_get_char();
+      if (r < 0) return EOF;
+      ch = static_cast<char>(r);
+      setg(&ch, &ch, &ch + 1);
+      return static_cast<unsigned char>(ch);
+    }
+  };
+  // Свой буфер std::cout: каждый фрагмент/символ уходит в JS НЕМЕДЛЕННО, минуя
+  // строковую буферизацию emscripten-TTY. Иначе промпт без '\\n' (напр. "Имя? ")
+  // не показывался бы до перевода строки — и пользователь вводил бы вслепую.
+  class AsyncOutBuf : public std::streambuf {
+  protected:
+    std::streamsize xsputn(const char* s, std::streamsize n) override {
+      if (n > 0) __cpp_out_write(s, static_cast<int>(n));
+      return n;
+    }
+    int overflow(int c) override {
+      if (c != EOF) { char ch = static_cast<char>(c); __cpp_out_write(&ch, 1); }
+      return c;
+    }
+  };
+  struct CppIoInstaller {
+    CppIoInstaller() {
+      static AsyncInBuf ibuf; std::cin.rdbuf(&ibuf);
+      static AsyncOutBuf obuf; std::cout.rdbuf(&obuf);
+    }
+  } __cpp_io_installer;
+}
+`;
+// JS-библиотека (линкуется в out.js): синхронные импорты ввода/вывода.
+// Приостановку даёт emscripten_sleep в C++ (надёжный Asyncify), а не эти функции.
+const CPPIO_LIB = `mergeInto(LibraryManager.library, {
+  __cpp_input_ready: function () { return Module.__inputReady ? Module.__inputReady() : 0; },
+  __cpp_get_char: function () { return Module.__getCharSync ? Module.__getCharSync() : -1; },
+  __cpp_out_write: function (ptr, len) { if (Module.__outWrite && len > 0) Module.__outWrite(HEAPU8.subarray(ptr, ptr + len)); }
+});
+`;
+const CPPIO_SOURCE_NAME = "__cppio.cpp";
+const CPPIO_LIB_NAME = "__cppio_lib.js";
 
 export class CppRuntimeError extends Error {
   constructor(message, code) {
@@ -165,6 +228,11 @@ class CppRuntime {
       throw new CppRuntimeError("Нет ни одного .cpp файла для компиляции", "NO_SOURCES");
     }
 
+    // Доп. единица для интерактивного std::cin + js-library (см. moduleFlags).
+    await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_SOURCE_NAME}`, CPPIO_SRC);
+    await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_LIB_NAME}`, CPPIO_LIB);
+    sources.push(CPPIO_SOURCE_NAME);
+
     const cmd = [
       "em++",
       ...flags,
@@ -231,7 +299,7 @@ class CppRuntime {
     const moduleJs = this._lastModuleJs;
 
     return new Promise((resolve) => {
-      const worker = new Worker(new URL("./exec-worker.js", import.meta.url));
+      const worker = new Worker(new URL("./exec-worker.js?b=13", import.meta.url));
       this._execWorker = worker;
 
       let exitCode = null;
@@ -239,10 +307,21 @@ class CppRuntime {
       let settled = false;
       const t0 = _now();
 
+      // Таймаут считает ТОЛЬКО время выполнения. Пока программа висит на std::cin
+      // (need-input), часы остановлены — иначе живой ввод убивался бы лимитом.
+      let timer = null;
+      const armTimer = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+      };
+      const stopTimer = () => {
+        if (timer) { clearTimeout(timer); timer = null; }
+      };
+
       const finish = (extra) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        stopTimer();
         worker.terminate();
         if (this._execWorker === worker) this._execWorker = null;
         resolve({
@@ -255,7 +334,7 @@ class CppRuntime {
         });
       };
 
-      const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+      armTimer();
 
       worker.onmessage = (e) => {
         const m = e.data || {};
@@ -268,10 +347,17 @@ class CppRuntime {
             });
             break;
           case "stdout":
+            armTimer(); // программа активна — перезапускаем счётчик выполнения
             opts.onStdout && opts.onStdout(m.chunk);
             break;
           case "stderr":
+            armTimer();
             opts.onStderr && opts.onStderr(m.chunk);
+            break;
+          case "need-input":
+            // программа ждёт ввод (std::cin) — часы стоят, UI активирует поле ввода
+            stopTimer();
+            opts.onNeedInput && opts.onNeedInput();
             break;
           case "truncated":
             truncated = true;
@@ -289,7 +375,17 @@ class CppRuntime {
 
       // Маркер отмены: cancelRun() выставит флаг через свойство worker'а.
       worker._onCancel = () => finish({ cancelled: true });
+      // provideInput() возобновляет выполнение → перезапускаем счётчик времени.
+      worker._armTimer = armTimer;
     });
+  }
+
+  /** Передать строку ввода работающей программе (интерактивный std::cin). */
+  provideInput(text) {
+    if (this._execWorker) {
+      this._execWorker.postMessage({ type: "input", text: String(text ?? "") });
+      if (typeof this._execWorker._armTimer === "function") this._execWorker._armTimer();
+    }
   }
 
   /** Прерывает текущий запуск (бесконечный цикл и т.п.). */

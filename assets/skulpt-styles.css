@@ -1900,6 +1900,15 @@ body[data-theme="dark"] .lang-chip {
 .c-dim {
   color: var(--faint);
 }
+/* Эхо живого пользовательского ввода в консоли (интерактивный std::cin). */
+.c-input {
+  color: var(--green);
+  font-weight: 500;
+}
+.c-input::before {
+  content: "› ";
+  opacity: 0.6;
+}
 
 /* ===== V-restyle 5: точное соответствие макету ide.html ===== */
 /* Иконки в кнопках */

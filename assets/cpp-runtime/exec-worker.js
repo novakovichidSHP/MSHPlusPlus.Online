@@ -1,89 +1,164 @@
 /**
- * exec-worker — изолированный запуск скомпилированной C++-программы.
+ * exec-worker — изолированный запуск скомпилированной C++-программы
+ * с ИНТЕРАКТИВНЫМ вводом (как в классической консоли).
  *
  * Живёт в отдельном Web Worker'е (classic), чтобы:
  *   • не блокировать UI во время выполнения;
- *   • жёстко прерывать бесконечные циклы через worker.terminate() из фасада.
+ *   • жёстко прерывать программу через worker.terminate() из фасада.
+ *
+ * Интерактивный ввод: модуль скомпилирован с -sASYNCIFY + кастомный streambuf
+ * (см. cpp-runtime: __cppio.cpp / inlib.js), который читает std::cin через
+ * импорт __cpp_get_char → Module.__tryByte()/__waitByte(). Когда буфер ввода
+ * пуст, программа ПРИОСТАНАВЛИВАЕТСЯ (Asyncify) и worker шлёт 'need-input';
+ * главный поток присылает {type:'input', text}, выполнение продолжается.
  *
  * Контракт сообщений:
- *   IN : { moduleJs, stdin, maxOutputBytes }
- *   OUT: { type:'ready' }                       — worker загрузился
- *        { type:'stdout', chunk }               — порция вывода программы
- *        { type:'stderr', chunk }               — порция stderr программы
- *        { type:'truncated' }                   — достигнут лимит вывода
- *        { type:'done', exitCode }              — программа завершилась
- *        { type:'error', message }              — ошибка выполнения/инстанса
- *
- * Модуль компилируется с -sSINGLE_FILE=1 (wasm встроен → без fetch),
- * -sMODULARIZE=1 -sEXPORT_NAME=createCppModule, -sEXIT_RUNTIME=1.
+ *   IN : { moduleJs, stdin, maxOutputBytes }   — старт
+ *        { type:'input', text }                — порция ввода от пользователя
+ *   OUT: { type:'ready' }                      — worker загрузился
+ *        { type:'stdout'|'stderr', chunk }     — вывод программы
+ *        { type:'need-input' }                 — программа ждёт ввод (cin)
+ *        { type:'truncated' }                  — достигнут лимит вывода
+ *        { type:'done', exitCode }             — программа завершилась
+ *        { type:'error', message }             — ошибка выполнения/инстанса
  */
 
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-self.onmessage = async (event) => {
-  const { moduleJs, stdin, maxOutputBytes } = event.data || {};
+let started = false;
+let inputBytes = new Uint8Array(0);
+let inputPtr = 0;
+
+// Добавить порцию пользовательского ввода в буфер (busy-poll в C++ его подхватит).
+function feedInput(text) {
+  const add = encoder.encode(String(text ?? ""));
+  if (!add.length) return;
+  const merged = new Uint8Array(inputBytes.length + add.length);
+  merged.set(inputBytes);
+  merged.set(add, inputBytes.length);
+  inputBytes = merged;
+}
+
+self.onmessage = (event) => {
+  const m = event.data || {};
+  if (m.type === "input") {
+    feedInput(m.text);
+    return;
+  }
+  if (started) return;
+  started = true;
+  start(m);
+};
+
+async function start({ moduleJs, stdin, maxOutputBytes }) {
   if (typeof moduleJs !== "string") {
     self.postMessage({ type: "error", message: "exec-worker: нет moduleJs" });
     return;
   }
-
-  const inputBytes = encoder.encode(typeof stdin === "string" ? stdin : "");
+  inputBytes = encoder.encode(typeof stdin === "string" ? stdin : "");
+  inputPtr = 0;
   const cap = Number.isFinite(maxOutputBytes) ? maxOutputBytes : 2_000_000;
 
-  let inputPtr = 0;
   let outputBytes = 0;
   let truncated = false;
-  let exitCode = 0;
-  let exitSeen = false;
+  let finished = false;
 
-  function emit(stream, s) {
+  // ВАЖНО (доказано замером): при -sASYNCIFY+EXIT_RUNTIME, когда main
+  // приостанавливается на std::cin (asyncify-разворот стека), ЛОЖНО срабатывают
+  // сразу ТРИ сигнала: Module.quit(0), резолв промиса фабрики и ExitStatus-реджект.
+  // А вот Module.onExit стреляет СТРОГО на реальном завершении программы (после
+  // того как main по-настоящему вернулся). Поэтому «done» шлём ТОЛЬКО по onExit;
+  // quit и резолв/ExitStatus-реджект фабрики НЕ считаем завершением.
+  function finish(code) {
+    if (finished) return;
+    finished = true;
+    self.postMessage({ type: "done", exitCode: code | 0 });
+  }
+
+  // Сырой вывод без добавления перевода строки (для посимвольного std::cout).
+  function emitRaw(stream, text) {
     if (truncated) return;
-    const line = (s ?? "") + "\n";
-    outputBytes += encoder.encode(line).length;
+    outputBytes += encoder.encode(text).length;
     if (outputBytes > cap) {
       truncated = true;
       self.postMessage({ type: "truncated" });
       return;
     }
-    self.postMessage({ type: stream, chunk: line });
+    self.postMessage({ type: stream, chunk: text });
+  }
+  // Построчный вывод (Module.print/printErr вызываются по строкам → добавляем \n).
+  function emit(stream, s) {
+    emitRaw(stream, (s ?? "") + "\n");
+  }
+
+  // Опрос буфера ввода (C++ busy-poll через emscripten_sleep).
+  // Когда данных нет — один раз сигналим UI 'need-input' (программа ждёт ввод).
+  let needInputPosted = false;
+  function inputReady() {
+    if (inputPtr < inputBytes.length) {
+      needInputPosted = false;
+      return 1;
+    }
+    if (!needInputPosted) {
+      needInputPosted = true;
+      self.postMessage({ type: "need-input" });
+    }
+    return 0;
+  }
+  function getCharSync() {
+    return inputPtr < inputBytes.length ? inputBytes[inputPtr++] : -1;
   }
 
   const moduleConfig = {
     print: (s) => emit("stdout", s),
     printErr: (s) => emit("stderr", s),
-    // batch stdin: отдаём байты заранее заданного буфера, затем EOF (null)
+    // C stdin (scanf/getchar) — батч из того же буфера, без паузы (EOF при пустом).
     stdin: () => (inputPtr < inputBytes.length ? inputBytes[inputPtr++] : null),
-    // перехватываем код выхода (EXIT_RUNTIME=1 → exit() после main)
-    onExit: (code) => {
-      exitSeen = true;
-      exitCode = code | 0;
+    // std::cin (через async streambuf + emscripten_sleep):
+    __inputReady: inputReady,
+    __getCharSync: getCharSync,
+    // std::cout пишет сюда напрямую (посимвольно/фрагментами) — без буферизации,
+    // чтобы промпт был виден ДО приостановки на вводе. Байты приходят готовым
+    // срезом HEAPU8 (js-library извлекает их там, где HEAPU8 точно валиден).
+    __outWrite: (bytes) => {
+      if (truncated || !bytes || !bytes.length) return;
+      emitRaw("stdout", decoder.decode(bytes, { stream: true }));
     },
-    quit: (code) => {
-      exitSeen = true;
-      exitCode = code | 0;
-    },
-    // глушим попытки загрузки внешних ресурсов (их быть не должно при SINGLE_FILE)
+    // ЕДИНСТВЕННЫЙ достоверный сигнал завершения программы.
+    onExit: (code) => finish(code),
+    // quit стреляет и на приостановке (cin), и на реальном выходе → НЕ финишим тут.
+    quit: () => {},
     locateFile: (path) => path
   };
 
   try {
-    // moduleJs определяет глобальную фабрику createCppModule (MODULARIZE).
-    // Косвенный eval → выполнение в глобальной области worker'а.
     (0, eval)(moduleJs);
-
     const factory = self.createCppModule;
     if (typeof factory !== "function") {
       self.postMessage({ type: "error", message: "exec-worker: createCppModule не определён" });
       return;
     }
-
-    // INVOKE_RUN по умолчанию → main() исполняется во время инициализации.
-    await factory(moduleConfig);
-    self.postMessage({ type: "done", exitCode: exitSeen ? exitCode : 0 });
+    // НЕ await→done: ждём onExit. Резолв промиса и ExitStatus-реджект могут прийти
+    // на приостановке (cin) — это НЕ завершение, поэтому их игнорируем. Сообщаем
+    // только о РЕАЛЬНОЙ ошибке выполнения (не ExitStatus).
+    factory(moduleConfig).then(
+      () => { /* init/suspend — финал строго по onExit */ },
+      (err) => {
+        if (err && (err.name === "ExitStatus" || typeof err.status === "number")) {
+          return; // штатный разворот стека (suspend/exit) — ждём onExit
+        }
+        if (!finished) {
+          self.postMessage({
+            type: "error",
+            message: String((err && err.message) || err || "unknown runtime error")
+          });
+        }
+      }
+    );
   } catch (err) {
-    // emscripten при exit() может бросать ExitStatus — это штатное завершение.
     if (err && (err.name === "ExitStatus" || typeof err.status === "number")) {
-      self.postMessage({ type: "done", exitCode: err.status | 0 });
+      finish(err.status);
       return;
     }
     self.postMessage({
@@ -91,6 +166,6 @@ self.onmessage = async (event) => {
       message: String((err && err.message) || err || "unknown runtime error")
     });
   }
-};
+}
 
 self.postMessage({ type: "ready" });

@@ -3,7 +3,7 @@ import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
-import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js";
+import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=5";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 
 // Движок C++ (emception) — занимает место Skulpt. Инициализируется в initRuntime().
@@ -34,8 +34,8 @@ const MOBILE_ACTION_LABELS = {
   export: "⬆️",
   import: "⬇️"
 };
-const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Данные, которые программа прочитает через std::cin…";
-const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Данные для std::cin…";
+const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Программа запросит ввод — введите строку и нажмите Enter…";
+const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Введите строку, Enter — отправить…";
 
 const VALID_FILENAME = /^[A-Za-z0-9._\-\u0400-\u04FF]+$/;
 // \u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u043E\u0432 C++ (\u0435\u0434\u0438\u043D\u0438\u0446\u044B \u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 + \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438). \u0418\u043C\u044F \u0431\u0435\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u2192 .cpp.
@@ -122,6 +122,7 @@ const state = {
     editorFontSize: EDITOR_FONT_DEFAULT
   },
   runtimeReady: false,
+  running: false,
   stdinResolver: null,
   runToken: 0,
   runtimeBlocked: false,
@@ -198,7 +199,6 @@ const els = {
   importInput: document.getElementById("import-input"),
   consoleOutput: document.getElementById("console-output"),
   consoleInput: document.getElementById("console-input"),
-  consoleSend: document.getElementById("console-send"),
   runStatus: document.getElementById("run-status"),
   consoleLayoutToggle: document.getElementById("console-layout-toggle"),
   workspace: document.querySelector(".workspace"),
@@ -544,14 +544,15 @@ function bindUi() {
     window.visualViewport.addEventListener("scroll", applyResponsiveCardState);
   }
 
-  // Кнопка «Запустить с вводом» и Ctrl/Cmd+Enter — запуск с текущим stdin.
-  // Обычный Enter в поле — перенос строки (многострочный batch-ввод).
+  // Живой (интерактивный) ввод как в классической консоли: программа запускается,
+  // доходит до std::cin → приостанавливается и просит ввод; пользователь печатает
+  // строку и жмёт Enter — она тут же уходит в работающую программу.
+  // Shift+Enter — буквальный перенос строки (на случай многострочной порции).
   enableConsoleInput();
-  els.consoleSend.addEventListener("click", () => runActiveFile());
   els.consoleInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      runActiveFile();
+      sendConsoleLine();
     }
   });
 
@@ -2905,9 +2906,25 @@ function updateRunStatus(status) {
 }
 
 function enableConsoleInput() {
-  // Поле «Ввод · stdin» (batch) доступно всегда — ввод готовится до запуска.
+  // Поле ввода доступно всегда; реально строки уходят в программу только во время
+  // выполнения (sendConsoleLine проверяет state.running).
   if (els.consoleInput) els.consoleInput.disabled = false;
-  if (els.consoleSend) els.consoleSend.disabled = false;
+}
+
+/**
+ * Отправляет одну строку живого ввода работающей программе (интерактивный std::cin).
+ * Эхо строки в консоль (как печатает терминал) + передача в движок. Вне выполнения
+ * (state.running === false) ничего не делает.
+ */
+function sendConsoleLine() {
+  if (!state.running || !cppEngine) {
+    return;
+  }
+  const line = els.consoleInput ? els.consoleInput.value : "";
+  appendConsoleStyled(line, "c-input"); // эхо введённой строки
+  cppEngine.provideInput(line + "\n");
+  if (els.consoleInput) els.consoleInput.value = "";
+  setConsoleInputWaiting(false);
 }
 
 function setConsoleInputWaiting(waiting) {
@@ -3136,13 +3153,7 @@ async function runActiveFile() {
     setUiCard("console");
   }
   clearConsole();
-
-  // batch stdin: содержимое поля «Ввод · stdin» отдаём целиком в std::cin.
-  // Гарантируем завершающий перевод строки (иначе getline на последней строке зависнет на EOF).
-  let stdinBuffer = els.consoleInput ? els.consoleInput.value : "";
-  if (stdinBuffer && !stdinBuffer.endsWith("\n")) {
-    stdinBuffer += "\n";
-  }
+  if (els.consoleInput) els.consoleInput.value = "";
 
   const runToken = state.runToken + 1;
   state.runToken = runToken;
@@ -3167,22 +3178,30 @@ async function runActiveFile() {
     return;
   }
 
-  // --- Выполнение ---
+  // --- Выполнение (интерактивный ввод) ---
+  // Запускаем с пустым stdin. Когда программа доходит до std::cin и буфер пуст,
+  // движок шлёт onNeedInput → подсвечиваем поле ввода; пользователь вводит строку
+  // вживую (Enter → provideInput), программа продолжается. Как в обычной консоли.
   appendConsoleLabel("Вывод программы");
   updateRunStatus("running");
+  state.running = true;
   let runResult;
   try {
     runResult = await cppEngine.run({
-      stdin: stdinBuffer,
+      stdin: "",
       onStdout: (text) => appendConsole(text, false),
-      onStderr: (text) => appendConsole(text, true)
+      onStderr: (text) => appendConsole(text, true),
+      onNeedInput: () => setConsoleInputWaiting(true)
     });
   } catch (error) {
+    state.running = false;
     if (state.runToken !== runToken) return;
     appendConsole(`\n${String((error && error.message) || error)}\n`, true);
     hardStop("error");
     return;
   }
+  state.running = false;
+  setConsoleInputWaiting(false);
   if (state.runToken !== runToken) return;
 
   if (runResult.timedOut) {
@@ -3297,6 +3316,7 @@ function hardStop(status = "stopped") {
   if (cppEngine) {
     cppEngine.cancelRun();
   }
+  state.running = false;
   state.stdinQueue = [];
   setConsoleInputWaiting(false);
   state.stdinResolver = null;
