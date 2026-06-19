@@ -3,7 +3,7 @@ import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
-import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=5";
+import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=9";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 
 // Движок C++ (emception) — занимает место Skulpt. Инициализируется в initRuntime().
@@ -1431,7 +1431,7 @@ async function createFile() {
   }
   const defaultName = getDefaultModuleName();
   const name = await promptModal({
-    title: "Создать модуль",
+    title: "Создать файл",
     placeholder: defaultName,
     fallbackValue: defaultName,
     confirmText: "Создать"
@@ -1440,21 +1440,21 @@ async function createFile() {
     return;
   }
   const trimmed = name.trim();
-  const normalized = normalizeCppFileName(trimmed);
+  const normalized = normalizeFileName(trimmed);
   if (!normalized) {
-    showToast("Поддерживаются модули .cpp/.cc/.h/.hpp.");
+    showToast("Введите имя файла.");
     return;
   }
   if (!validateFileName(normalized)) {
-    showToast("Некорректное имя модуля.");
+    showToast("Некорректное имя файла.");
     return;
   }
   if (getFileByName(normalized)) {
-    showToast("Модуль уже существует.");
+    showToast("Файл уже существует.");
     return;
   }
   if (getCurrentFiles().length >= CONFIG.MAX_FILES) {
-    showToast("Достигнут лимит модулей.");
+    showToast("Достигнут лимит файлов.");
     return;
   }
 
@@ -1488,7 +1488,7 @@ async function renameFile() {
     return;
   }
   const nextName = await promptModal({
-    title: "Переименовать модуль",
+    title: "Переименовать файл",
     value: state.activeFile,
     confirmText: "Переименовать"
   });
@@ -1496,20 +1496,20 @@ async function renameFile() {
     return;
   }
   const trimmed = nextName.trim();
-  const normalized = normalizeCppFileName(trimmed);
+  const normalized = normalizeFileName(trimmed);
   if (!normalized) {
-    showToast("Поддерживаются модули .cpp/.cc/.h/.hpp.");
+    showToast("Введите имя файла.");
     return;
   }
   if (normalized === state.activeFile) {
     return;
   }
   if (!validateFileName(normalized)) {
-    showToast("Некорректное имя модуля.");
+    showToast("Некорректное имя файла.");
     return;
   }
   if (getFileByName(normalized)) {
-    showToast("Модуль уже существует.");
+    showToast("Файл уже существует.");
     return;
   }
 
@@ -1634,7 +1634,7 @@ function validateFileName(name) {
   return VALID_FILENAME.test(name);
 }
 
-function normalizeCppFileName(name) {
+function normalizeFileName(name) {
   if (!name) {
     return null;
   }
@@ -1642,11 +1642,11 @@ function normalizeCppFileName(name) {
   if (!trimmed) {
     return null;
   }
+  // Без расширения → исходник по умолчанию (.cpp). С расширением → принимаем как
+  // есть: исходники компилируются, прочее (.txt/.csv/.dat/...) — файлы-данные для
+  // файлового I/O программы. Корректность символов проверяет validateFileName.
   if (!trimmed.includes(".")) {
     return `${trimmed}${DEFAULT_SOURCE_EXTENSION}`;
-  }
-  if (!hasSourceExtension(trimmed)) {
-    return null;
   }
   return trimmed;
 }
@@ -2502,14 +2502,20 @@ async function importFiles(files) {
       imports.push(...items);
       continue;
     }
-    skipped += 1;
+    // Прочее — файлы-данные (txt/csv/dat/...): читаем как текст для файлового I/O.
+    try {
+      const content = await file.text();
+      imports.push({ name, content });
+    } catch (error) {
+      skipped += 1;
+    }
   }
   if (!imports.length) {
-    showToast("Не найдено файлов .cpp/.h для импорта.");
+    showToast("Не найдено файлов для импорта.");
     return;
   }
   if (skipped) {
-    showToast("Некоторые файлы пропущены (поддерживаются .cpp/.h/.hpp, .zip, .json).");
+    showToast("Некоторые файлы пропущены.");
   }
   await applyImportedFiles(imports);
 }
@@ -2528,9 +2534,7 @@ function extractPyFromZip(bytes) {
     if (!entryName || entryName.endsWith("/")) {
       continue;
     }
-    if (!hasSourceExtension(entryName)) {
-      continue;
-    }
+    // Исходники И файлы-данные: проект должен полностью round-trip'иться.
     const base = getBaseName(entryName);
     const content = decoder.decode(data);
     out.push({ name: base, content });
@@ -2558,9 +2562,6 @@ function extractPyFromJson(text) {
       continue;
     }
     const name = String(file.name);
-    if (!hasSourceExtension(name)) {
-      continue;
-    }
     out.push({ name, content: String(file.content || "") });
   }
   if (skippedAssets) {
@@ -2578,7 +2579,7 @@ async function applyImportedFiles(imports) {
   let changed = false;
   let applyAllAction = null;
   for (const item of imports) {
-    const normalized = normalizeCppFileName(item.name);
+    const normalized = normalizeFileName(item.name);
     if (!normalized || !validateFileName(normalized)) {
       showToast(`Некорректное имя файла: ${item.name}`);
       continue;
@@ -2663,7 +2664,7 @@ async function resolveImportConflict(name, applyAllAction, added) {
       if (action === "rename") {
         const input = els.modal.querySelector("#import-new-name");
         const value = input ? input.value : "";
-        const normalized = normalizeCppFileName(value);
+        const normalized = normalizeFileName(value);
         if (!normalized || !validateFileName(normalized) || isNameTaken(normalized, added)) {
           showToast("Некорректное или занятое имя файла.");
           return;
@@ -3185,10 +3186,17 @@ async function runActiveFile() {
   appendConsoleLabel("Вывод программы");
   updateRunStatus("running");
   state.running = true;
+  // Файлы-данные (не-исходники) кладём в MEMFS программы → доступны для
+  // std::ifstream("input.txt") и т.п. Файлы, записанные программой, вернутся в
+  // runResult.outputFiles и будут добавлены в проект.
+  const dataFiles = getCurrentFiles()
+    .filter((f) => !hasSourceExtension(f.name))
+    .map((f) => ({ name: f.name, content: String(f.content ?? "") }));
   let runResult;
   try {
     runResult = await cppEngine.run({
       stdin: "",
+      files: dataFiles,
       onStdout: (text) => appendConsole(text, false),
       onStderr: (text) => appendConsole(text, true),
       onNeedInput: () => setConsoleInputWaiting(true)
@@ -3222,7 +3230,59 @@ async function runActiveFile() {
     appendConsole(`\n[вывод обрезан]\n`, true);
   }
 
+  // Файлы, записанные программой (output.txt и т.п.) → добавляем в проект.
+  if (Array.isArray(runResult.outputFiles) && runResult.outputFiles.length) {
+    applyOutputFiles(runResult.outputFiles);
+  }
+
   els.stopBtn.disabled = true;
+}
+
+/**
+ * Добавляет/обновляет в проекте файлы, записанные программой во время выполнения
+ * (файловый вывод). Имена нормализуются и валидируются; в snapshot-режиме идут
+ * в overlay черновика. Показывает тост со списком.
+ */
+function applyOutputFiles(outputFiles) {
+  if (state.embed.readonly) return;
+  const names = [];
+  for (const item of outputFiles) {
+    const normalized = normalizeFileName(item && item.name);
+    if (!normalized || !validateFileName(normalized)) continue;
+    // Защита кода: не даём файловому выводу программы перезаписать ИСХОДНИК проекта.
+    if (hasSourceExtension(normalized) && getFileByName(normalized)) continue;
+    const content = String((item && item.content) || "");
+    if (state.mode === "project") {
+      const existing = getFileByName(normalized);
+      if (existing) {
+        existing.content = content;
+      } else if (getCurrentFiles().length < CONFIG.MAX_FILES) {
+        state.project.files.push({ name: normalized, content });
+      } else {
+        continue;
+      }
+    } else if (state.mode === "snapshot") {
+      const { draft } = state.snapshot;
+      draft.overlayFiles[normalized] = content;
+      draft.deletedFiles = draft.deletedFiles.filter((n) => n !== normalized);
+    } else {
+      continue;
+    }
+    names.push(normalized);
+  }
+  if (!names.length) return;
+  if (state.mode === "project") {
+    scheduleSave();
+  } else {
+    scheduleDraftSave();
+  }
+  // Если активный файл оказался перезаписан — обновим редактор из модели.
+  if (names.includes(state.activeFile)) {
+    setActiveFile(state.activeFile);
+  }
+  renderFiles(getCurrentFiles());
+  updateTabs();
+  showToast(`Программа записала: ${names.join(", ")}`);
 }
 
 /**

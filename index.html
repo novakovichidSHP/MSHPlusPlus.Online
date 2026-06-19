@@ -23,7 +23,7 @@
 
   <div id="modal" class="modal hidden" aria-hidden="true"></div>
   <div id="toasts" class="toasts"></div>
-  <input id="import-input" type="file" class="hidden" multiple accept=".cpp,.cc,.cxx,.c,.h,.hpp,.hh,.hxx,.zip,.json" />
+  <input id="import-input" type="file" class="hidden" multiple accept=".cpp,.cc,.cxx,.c,.h,.hpp,.hh,.hxx,.txt,.csv,.tsv,.dat,.in,.out,.json,.md,.zip" />
 
   <main id="view-landing" class="view landing hidden">
     <div class="landing-topbar">
@@ -103,7 +103,7 @@
       <aside id="sidebar" class="sidebar">
         <div class="panel">
           <div class="panel-header">
-            <div class="panel-title">Модули</div>
+            <div class="panel-title">Файлы</div>
             <div class="panel-actions panel-actions-files">
               <button id="file-create" class="btn small">+</button>
               <button id="file-rename" class="btn small">Переименовать</button>
@@ -180,7 +180,7 @@
       </section>
     </section>
     <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Навигация IDE">
-      <button class="mobile-nav-btn" data-card="modules" aria-controls="sidebar" aria-pressed="false">Модули</button>
+      <button class="mobile-nav-btn" data-card="modules" aria-controls="sidebar" aria-pressed="false">Файлы</button>
       <button class="mobile-nav-btn" data-card="editor" aria-controls="editor-pane" aria-pressed="true">Редактор</button>
       <button class="mobile-nav-btn" data-card="console" aria-controls="console-pane" aria-pressed="false">Консоль</button>
     </nav>
@@ -188,7 +188,7 @@
       title="Перезапустить IDE с очисткой кеша">Перезапуск IDE</button>
   </main>
 
-  <script type="module" src="assets/skulpt-app.js?v=7"></script>
+  <script type="module" src="assets/skulpt-app.js?v=12"></script>
 </body>
 
 </html>

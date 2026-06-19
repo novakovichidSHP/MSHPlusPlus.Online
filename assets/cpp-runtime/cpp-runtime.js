@@ -36,6 +36,12 @@ export const DEFAULTS = {
     "-sEXPORT_NAME=createCppModule",
     "-sEXIT_RUNTIME=1",
     "-sASYNCIFY=1",
+    // FS всегда присутствует — даже если программа не делает файлового I/O, мы
+    // кладём в её MEMFS файлы-данные проекта (см. exec-worker preRun /work).
+    // FS экспортируем: при -sMODULARIZE он внутри замыкания, снаружи (наш preRun)
+    // доступен только как Module.FS.
+    "-sFORCE_FILESYSTEM=1",
+    "-sEXPORTED_RUNTIME_METHODS=FS",
     "--js-library", "/working/__cppio_lib.js"
   ],
   compileTimeoutMs: 45000,
@@ -283,11 +289,15 @@ class CppRuntime {
    * Запускает последний успешно скомпилированный модуль.
    * @param {object} [opts]
    * @param {string}   [opts.stdin=""]           — заранее заданный ввод (batch).
+   * @param {Array<{name:string,content:string}>} [opts.files] — файлы-данные,
+   *        кладутся в MEMFS программы (/work) для std::ifstream и т.п.
    * @param {number}   [opts.timeoutMs]          — таймаут выполнения.
    * @param {(s:string)=>void} [opts.onStdout]   — порция stdout.
    * @param {(s:string)=>void} [opts.onStderr]   — порция stderr.
+   * @param {()=>void} [opts.onNeedInput]        — программа ждёт ввод (std::cin).
    * @returns {Promise<{exitCode:number|null, timedOut:boolean, cancelled:boolean,
-   *                    truncated:boolean, durationMs:number, error?:string}>}
+   *                    truncated:boolean, outputFiles:Array<{name:string,content:string}>,
+   *                    durationMs:number, error?:string}>}
    */
   run(opts = {}) {
     if (!this._lastModuleJs) {
@@ -299,12 +309,13 @@ class CppRuntime {
     const moduleJs = this._lastModuleJs;
 
     return new Promise((resolve) => {
-      const worker = new Worker(new URL("./exec-worker.js?b=13", import.meta.url));
+      const worker = new Worker(new URL("./exec-worker.js?b=17", import.meta.url));
       this._execWorker = worker;
 
       let exitCode = null;
       let truncated = false;
       let settled = false;
+      let outputFiles = [];
       const t0 = _now();
 
       // Таймаут считает ТОЛЬКО время выполнения. Пока программа висит на std::cin
@@ -329,6 +340,7 @@ class CppRuntime {
           timedOut: false,
           cancelled: false,
           truncated,
+          outputFiles,
           durationMs: _now() - t0,
           ...extra
         });
@@ -343,6 +355,7 @@ class CppRuntime {
             worker.postMessage({
               moduleJs,
               stdin: opts.stdin || "",
+              files: Array.isArray(opts.files) ? opts.files : [],
               maxOutputBytes: this.options.maxOutputBytes
             });
             break;
@@ -358,6 +371,10 @@ class CppRuntime {
             // программа ждёт ввод (std::cin) — часы стоят, UI активирует поле ввода
             stopTimer();
             opts.onNeedInput && opts.onNeedInput();
+            break;
+          case "output-files":
+            // файлы, созданные/изменённые программой в /work (файловый вывод)
+            if (Array.isArray(m.files)) outputFiles = m.files;
             break;
           case "truncated":
             truncated = true;

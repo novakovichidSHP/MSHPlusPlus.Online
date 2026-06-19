@@ -13,11 +13,12 @@
  * главный поток присылает {type:'input', text}, выполнение продолжается.
  *
  * Контракт сообщений:
- *   IN : { moduleJs, stdin, maxOutputBytes }   — старт
+ *   IN : { moduleJs, stdin, files, maxOutputBytes } — старт (files — данные в /work)
  *        { type:'input', text }                — порция ввода от пользователя
  *   OUT: { type:'ready' }                      — worker загрузился
  *        { type:'stdout'|'stderr', chunk }     — вывод программы
  *        { type:'need-input' }                 — программа ждёт ввод (cin)
+ *        { type:'output-files', files }        — файлы, записанные программой в /work
  *        { type:'truncated' }                  — достигнут лимит вывода
  *        { type:'done', exitCode }             — программа завершилась
  *        { type:'error', message }             — ошибка выполнения/инстанса
@@ -51,7 +52,17 @@ self.onmessage = (event) => {
   start(m);
 };
 
-async function start({ moduleJs, stdin, maxOutputBytes }) {
+// Рабочий каталог программы в MEMFS: туда кладём файлы-данные и оттуда
+// собираем то, что программа записала (файловый вывод).
+const WORKDIR = "/work";
+
+function sameBytes(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+async function start({ moduleJs, stdin, files, maxOutputBytes }) {
   if (typeof moduleJs !== "string") {
     self.postMessage({ type: "error", message: "exec-worker: нет moduleJs" });
     return;
@@ -60,9 +71,38 @@ async function start({ moduleJs, stdin, maxOutputBytes }) {
   inputPtr = 0;
   const cap = Number.isFinite(maxOutputBytes) ? maxOutputBytes : 2_000_000;
 
+  // Файлы-данные проекта (вход) и снимок того, что мы записали — чтобы потом
+  // отличить созданные/изменённые программой файлы от неизменённых входных.
+  const inputFiles = Array.isArray(files) ? files : [];
+  const inputSnapshot = new Map(); // name -> Uint8Array
+  let runtimeFS = null;            // ссылка на FS модуля (захватываем в preRun)
+
   let outputBytes = 0;
   let truncated = false;
   let finished = false;
+
+  // Собрать файлы, созданные/изменённые программой в /work (файловый вывод).
+  function collectOutputFiles() {
+    if (!runtimeFS) return [];
+    let entries;
+    try { entries = runtimeFS.readdir(WORKDIR); } catch (e) { return []; }
+    const out = [];
+    for (const name of entries) {
+      if (name === "." || name === "..") continue;
+      let data;
+      try {
+        const path = WORKDIR + "/" + name;
+        if (runtimeFS.isDir(runtimeFS.stat(path).mode)) continue; // без подкаталогов
+        data = runtimeFS.readFile(path); // Uint8Array
+      } catch (e) { continue; }
+      const prev = inputSnapshot.get(name);
+      if (prev && sameBytes(prev, data)) continue; // неизменённый вход — пропускаем
+      // СВОЙ декодер: общий `decoder` работает в потоковом режиме (__outWrite) и
+      // может держать «хвост» от stdout — нельзя смешивать с содержимым файла.
+      out.push({ name, content: new TextDecoder().decode(data) });
+    }
+    return out;
+  }
 
   // ВАЖНО (доказано замером): при -sASYNCIFY+EXIT_RUNTIME, когда main
   // приостанавливается на std::cin (asyncify-разворот стека), ЛОЖНО срабатывают
@@ -73,6 +113,8 @@ async function start({ moduleJs, stdin, maxOutputBytes }) {
   function finish(code) {
     if (finished) return;
     finished = true;
+    const outFiles = collectOutputFiles();
+    if (outFiles.length) self.postMessage({ type: "output-files", files: outFiles });
     self.postMessage({ type: "done", exitCode: code | 0 });
   }
 
@@ -111,6 +153,26 @@ async function start({ moduleJs, stdin, maxOutputBytes }) {
   }
 
   const moduleConfig = {
+    // До main: монтируем рабочий каталог и кладём в него файлы-данные проекта,
+    // чтобы std::ifstream("input.txt") и т.п. читали их. FS в области видимости
+    // preRun. Захватываем ссылку на FS для последующего сбора вывода.
+    // emscripten зовёт preRun-колбэк с Module-аргументом; при -sMODULARIZE FS
+    // снаружи виден только как Module.FS (экспортирован через EXPORTED_RUNTIME_METHODS).
+    preRun: [function (mod) {
+      try {
+        runtimeFS = (mod && mod.FS) || (typeof FS !== "undefined" ? FS : null);
+        if (!runtimeFS) return;
+        try { runtimeFS.mkdir(WORKDIR); } catch (e) { /* уже есть */ }
+        runtimeFS.chdir(WORKDIR);
+        for (const f of inputFiles) {
+          const name = String((f && f.name) || "").trim();
+          if (!name || name.includes("/")) continue;
+          const bytes = encoder.encode(typeof f.content === "string" ? f.content : "");
+          runtimeFS.writeFile(WORKDIR + "/" + name, bytes);
+          inputSnapshot.set(name, bytes);
+        }
+      } catch (e) { /* FS недоступен — файловый I/O просто не работает */ }
+    }],
     print: (s) => emit("stdout", s),
     printErr: (s) => emit("stderr", s),
     // C stdin (scanf/getchar) — батч из того же буфера, без паузы (EOF при пустом).
