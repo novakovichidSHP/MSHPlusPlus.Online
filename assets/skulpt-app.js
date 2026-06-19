@@ -1,6 +1,7 @@
 import { gzipSync, gunzipSync, unzipSync } from "./skulpt-fflate.esm.js";
 import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
+import { dictEncode, dictDecode } from "./utils/share-dict.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
 import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=9";
@@ -867,7 +868,7 @@ function showView(view) {
  * @returns {Promise<void>}
  */
 async function router() {
-  const { route, id } = parseHash();
+  const { route, id, query } = parseHash();
   if (route === "landing") {
     showView("landing");
     await renderRecent();
@@ -2161,33 +2162,62 @@ function validateShareLimits(files) {
   return true;
 }
 
+// Кодировки тела ссылки:
+//   u — сырой JSON; g — gzip(JSON); n — словарь-эталон (без gzip); d — gzip(словарь).
+// Считаем все доступные кандидаты и берём самый короткий → ссылка НИКОГДА не длиннее
+// прежней (u/g остаются). Словарь подменяет типовые C++-конструкции (см. share-dict.js).
 async function buildPayload(payloadBytes) {
-  let prefix = "u";
-  let bodyBytes = payloadBytes;
+  const candidates = [{ prefix: "u", bytes: payloadBytes }];
+
+  let subbedBytes = null;
+  try {
+    const subbed = dictEncode(decoder.decode(payloadBytes));
+    if (subbed != null) {
+      subbedBytes = encoder.encode(subbed);
+      candidates.push({ prefix: "n", bytes: subbedBytes });
+    }
+  } catch (error) {
+    console.warn("Dict encode failed", error);
+  }
+
   try {
     const compressed = await compressBytes(payloadBytes);
-    if (compressed && compressed.length < payloadBytes.length) {
-      prefix = "g";
-      bodyBytes = compressed;
-    }
+    if (compressed) candidates.push({ prefix: "g", bytes: compressed });
   } catch (error) {
     console.warn("Compression failed", error);
   }
-  const payload = `${prefix}.${base64UrlEncode(bodyBytes)}`;
-  const shareId = await computeShareId(bodyBytes);
+  if (subbedBytes) {
+    try {
+      const compressed = await compressBytes(subbedBytes);
+      if (compressed) candidates.push({ prefix: "d", bytes: compressed });
+    } catch (error) {
+      console.warn("Dict compression failed", error);
+    }
+  }
+
+  let best = candidates[0];
+  for (const candidate of candidates) {
+    if (candidate.bytes.length < best.bytes.length) best = candidate;
+  }
+  const payload = `${best.prefix}.${base64UrlEncode(best.bytes)}`;
+  const shareId = await computeShareId(best.bytes);
   return { payload, shareId };
 }
 
 async function decodePayload(payload) {
   const [prefix, data] = payload.split(".");
   const bytes = base64UrlDecode(data || payload);
-  if (prefix === "g") {
+  if (prefix === "g" || prefix === "d") {
     try {
       const decompressed = await decompressBytes(bytes);
-      return JSON.parse(decoder.decode(decompressed));
+      const text = decoder.decode(decompressed);
+      return JSON.parse(prefix === "d" ? dictDecode(text) : text);
     } catch (error) {
       console.warn("Decompression failed", error);
     }
+  }
+  if (prefix === "n") {
+    return JSON.parse(dictDecode(decoder.decode(bytes)));
   }
   return JSON.parse(decoder.decode(bytes));
 }
