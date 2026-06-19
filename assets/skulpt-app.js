@@ -3194,15 +3194,18 @@ async function runActiveFile() {
       onNeedInput: () => setConsoleInputWaiting(true)
     });
   } catch (error) {
-    state.running = false;
+    // Сбрасываем running только если это всё ещё НАШ прогон: иначе затрём
+    // state.running=true у более нового прогона, перехватившего управление,
+    // и его интерактивный ввод перестанет приниматься (sendConsoleLine).
     if (state.runToken !== runToken) return;
+    state.running = false;
     appendConsole(`\n${String((error && error.message) || error)}\n`, true);
     hardStop("error");
     return;
   }
+  if (state.runToken !== runToken) return;
   state.running = false;
   setConsoleInputWaiting(false);
-  if (state.runToken !== runToken) return;
 
   if (runResult.timedOut) {
     appendConsole(`\nПревышен лимит времени выполнения (${Math.round(CONFIG.RUN_TIMEOUT_MS / 1000)} с).\n`, true);
