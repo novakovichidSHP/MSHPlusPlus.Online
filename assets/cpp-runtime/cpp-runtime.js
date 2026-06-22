@@ -314,6 +314,8 @@ const VIEWS_SHIM_SRC = `#pragma once
 #include <iterator>
 #include <functional>
 #include <utility>
+#include <tuple>
+#include <type_traits>
 #if !defined(__cpp_lib_ranges)
 namespace std { namespace ranges {
 template <class V, class Pred>
@@ -416,6 +418,33 @@ public:
   auto begin(){ auto it=ranges::begin(base_); auto e=ranges::end(base_); while(it!=e && std::invoke(pred_,*it)) ++it; return it; }
   auto end(){ return ranges::end(base_); }
 };
+template <class V, std::size_t N>
+class __shim_elements_view : public view_interface<__shim_elements_view<V,N>> {
+  V base_;
+public:
+  __shim_elements_view(V b):base_(std::move(b)){}
+  class iterator {
+  public:
+    using BaseIt = iterator_t<V>;
+    using iterator_concept = std::input_iterator_tag;
+    using iterator_category = std::input_iterator_tag;
+    using reference = decltype(std::get<N>(*std::declval<BaseIt&>()));
+    using value_type = std::remove_cvref_t<reference>;
+    using difference_type = range_difference_t<V>;
+  private:
+    BaseIt cur_{};
+  public:
+    iterator()=default;
+    iterator(BaseIt c):cur_(c){}
+    reference operator*() const { return std::get<N>(*cur_); }
+    iterator& operator++(){ ++cur_; return *this; }
+    void operator++(int){ ++*this; }
+    bool operator==(const iterator& o) const { return cur_==o.cur_; }
+    bool operator!=(const iterator& o) const { return cur_!=o.cur_; }
+  };
+  iterator begin(){ return iterator(ranges::begin(base_)); }
+  iterator end(){ return iterator(ranges::end(base_)); }
+};
 namespace views {
 template <class Fn> struct __shim_closure { Fn fn;
   template <class R> auto operator()(R&& r) const { return fn(std::forward<R>(r)); } };
@@ -461,13 +490,23 @@ struct __drop_while_fn {
     return __shim_closure{[p=std::move(pred)](auto&& r){ return __drop_while_fn{}(std::forward<decltype(r)>(r),p); }}; }
 };
 inline constexpr __drop_while_fn drop_while{};
+template <std::size_t N>
+struct __elements_fn {
+  template <class R> auto operator()(R&& r) const {
+    auto v=std::views::all(std::forward<R>(r));
+    return __shim_elements_view<decltype(v),N>(std::move(v)); }
+};
+template <class R, std::size_t N> auto operator|(R&& r, __elements_fn<N> e){ return e(std::forward<R>(r)); }
+template <std::size_t N> inline constexpr __elements_fn<N> elements{};
+inline constexpr __elements_fn<0> keys{};
+inline constexpr __elements_fn<1> values{};
 }
 }}
 #endif
 `;
 // Детектим только недостающие views (filter/take/drop, вкл. take_while/drop_while).
 // transform/reverse/iota и пр. в libc++14 штатные — для них шим не нужен.
-const VIEWS_DETECT_RE = /views::\s*(?:filter|take|drop)/;
+const VIEWS_DETECT_RE = /views::\s*(?:filter|take|drop|keys|values|elements)/;
 
 export class CppRuntimeError extends Error {
   constructor(message, code) {
