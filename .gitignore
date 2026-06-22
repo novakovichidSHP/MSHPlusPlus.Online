@@ -56,3 +56,6 @@ playwright.config.cjs
 .agents/
 .claude/
 .codex/
+
+# Замороженный libc++18-билд (см. docs/cpp-port/TOOLCHAIN_REBUILD.md) — локально, не коммитим
+toolchain.new18/
