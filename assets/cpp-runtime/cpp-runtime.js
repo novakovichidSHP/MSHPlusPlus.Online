@@ -115,6 +115,193 @@ const CPPIO_LIB = `mergeInto(LibraryManager.library, {
 const CPPIO_SOURCE_NAME = "__cppio.cpp";
 const CPPIO_LIB_NAME = "__cppio_lib.js";
 
+// --- Бэкпорт C++20 <format> через header-only {fmt} ---
+// Тулчейн несёт libc++14, в котором нет рабочего std::format (нужен libc++17+).
+// Пока тяжёлая пересборка тулчейна заморожена (docs/cpp-port/TOOLCHAIN_REBUILD.md),
+// даём std::format «малой кровью»: вендорим header-only {fmt} 10.2.1 и шимом
+// проецируем fmt::format → std::format. Прелюдия force-include'ится ТОЛЬКО когда
+// исходник реально использует std::format (детект FMT_DETECT_RE), чтобы не платить
+// разбором тяжёлых хедеров в обычных компиляциях.
+const FMT_HEADER_NAMES = ["core.h", "format.h", "format-inl.h"];
+const FMT_SHIM_NAME = "__std_format.hpp";
+// Кладём хедеры fmt ПЛОСКО в рабочий каталог: внутренние #include "core.h"/
+// "format-inl.h" у fmt — кавычечные, резолвятся в cwd (=/working), как и __cppio.cpp.
+// Так не нужны вложенные папки/-I (writeFile не гарантирует создание родителей).
+const FMT_SHIM_SRC = `// Прелюдия: C++20 <format> поверх header-only {fmt} 10.2.1.
+// Force-include из cpp-runtime только при использовании std::format.
+#pragma once
+#include <version>
+#if !defined(__cpp_lib_format)
+#  define FMT_HEADER_ONLY
+#  include "format.h"        // vendored {fmt}, лежит рядом в /working
+namespace std {
+  using ::fmt::format;
+  using ::fmt::vformat;
+  using ::fmt::format_to;
+  using ::fmt::format_to_n;
+  using ::fmt::formatted_size;
+  using ::fmt::make_format_args;
+  using ::fmt::format_args;
+  using ::fmt::format_string;
+  using ::fmt::formatter;
+  using ::fmt::format_error;
+}
+// Помечаем фичу как доступную, чтобы пользовательский #include <format>
+// (на libc++14 пустой/неполный) не пытался переопределить наши имена.
+#  define __cpp_lib_format 201907L
+#endif
+`;
+// Достаточно поймать любое обращение к семейству std::format — все имена,
+// которые шим вносит в std, начинаются с std::format, плюс vformat/make_format_args.
+const FMT_DETECT_RE = /std::\s*(?:v?format|make_format_args)/;
+
+// --- Бэкпорт C++20 <ranges>-АЛГОРИТМОВ (без ленивых views) ---
+// В libc++14 тулчейна ranges-алгоритмов нет (проверено: sort/find/count/for_each/…
+// все отсутствуют), поэтому шим добавляет их в std::ranges без коллизий. Ленивые
+// views (filter/transform/take) здесь НЕ реализованы — это отдельный тяжёлый слой
+// (range-v3, риск таймаута компиляции); views::iota/common в libc++14 уже есть.
+// Реализация — тонкие range-обёртки над <algorithm> с поддержкой проекций (std::invoke),
+// чтобы работали и проекции-указатели на член (ranges::sort(v, {}, &T::field)).
+const RANGES_SHIM_NAME = "__std_ranges.hpp";
+const RANGES_SHIM_SRC = `// Прелюдия: подмножество C++20 std::ranges-алгоритмов поверх <algorithm> (libc++14).
+// Force-include из cpp-runtime только при использовании std::ranges::.
+// Возвращаемые типы упрощены до итераторов/значений (не subrange/*_result) — на
+// практике совместимо; ленивые views не входят (нужен range-v3).
+#pragma once
+#include <version>
+#if !defined(__cpp_lib_ranges)
+#include <algorithm>
+#include <iterator>
+#include <functional>
+#include <utility>
+namespace std { namespace ranges {
+namespace __shim {
+  struct identity {
+    template <class T> constexpr T&& operator()(T&& t) const noexcept { return static_cast<T&&>(t); }
+  };
+}
+// --- немодифицирующие ---
+template <class R, class Pred, class Proj = __shim::identity>
+bool all_of(R&& r, Pred pred, Proj proj = {}) {
+  for (auto&& x : r) if (!std::invoke(pred, std::invoke(proj, x))) return false;
+  return true;
+}
+template <class R, class Pred, class Proj = __shim::identity>
+bool any_of(R&& r, Pred pred, Proj proj = {}) {
+  for (auto&& x : r) if (std::invoke(pred, std::invoke(proj, x))) return true;
+  return false;
+}
+template <class R, class Pred, class Proj = __shim::identity>
+bool none_of(R&& r, Pred pred, Proj proj = {}) {
+  for (auto&& x : r) if (std::invoke(pred, std::invoke(proj, x))) return false;
+  return true;
+}
+template <class R, class Fun, class Proj = __shim::identity>
+Fun for_each(R&& r, Fun f, Proj proj = {}) {
+  for (auto&& x : r) std::invoke(f, std::invoke(proj, x));
+  return f;
+}
+template <class R, class T, class Proj = __shim::identity>
+auto find(R&& r, const T& value, Proj proj = {}) {
+  auto first = std::begin(r); auto last = std::end(r);
+  for (; first != last; ++first) if (std::invoke(proj, *first) == value) break;
+  return first;
+}
+template <class R, class Pred, class Proj = __shim::identity>
+auto find_if(R&& r, Pred pred, Proj proj = {}) {
+  auto first = std::begin(r); auto last = std::end(r);
+  for (; first != last; ++first) if (std::invoke(pred, std::invoke(proj, *first))) break;
+  return first;
+}
+template <class R, class Pred, class Proj = __shim::identity>
+auto find_if_not(R&& r, Pred pred, Proj proj = {}) {
+  auto first = std::begin(r); auto last = std::end(r);
+  for (; first != last; ++first) if (!std::invoke(pred, std::invoke(proj, *first))) break;
+  return first;
+}
+template <class R, class T, class Proj = __shim::identity>
+auto count(R&& r, const T& value, Proj proj = {}) {
+  typename std::iterator_traits<decltype(std::begin(r))>::difference_type n = 0;
+  for (auto&& x : r) if (std::invoke(proj, x) == value) ++n;
+  return n;
+}
+template <class R, class Pred, class Proj = __shim::identity>
+auto count_if(R&& r, Pred pred, Proj proj = {}) {
+  typename std::iterator_traits<decltype(std::begin(r))>::difference_type n = 0;
+  for (auto&& x : r) if (std::invoke(pred, std::invoke(proj, x))) ++n;
+  return n;
+}
+// --- min/max ---
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+auto max_element(R&& r, Comp comp = {}, Proj proj = {}) {
+  auto first = std::begin(r), last = std::end(r);
+  if (first == last) return first;
+  auto best = first;
+  for (++first; first != last; ++first)
+    if (std::invoke(comp, std::invoke(proj, *best), std::invoke(proj, *first))) best = first;
+  return best;
+}
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+auto min_element(R&& r, Comp comp = {}, Proj proj = {}) {
+  auto first = std::begin(r), last = std::end(r);
+  if (first == last) return first;
+  auto best = first;
+  for (++first; first != last; ++first)
+    if (std::invoke(comp, std::invoke(proj, *first), std::invoke(proj, *best))) best = first;
+  return best;
+}
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+auto max(R&& r, Comp comp = {}, Proj proj = {}) {
+  auto it = ranges::max_element(r, comp, proj); return *it;
+}
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+auto min(R&& r, Comp comp = {}, Proj proj = {}) {
+  auto it = ranges::min_element(r, comp, proj); return *it;
+}
+// --- сортировка/упорядоченные ---
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+void sort(R&& r, Comp comp = {}, Proj proj = {}) {
+  std::sort(std::begin(r), std::end(r),
+    [&](auto&& a, auto&& b){ return std::invoke(comp, std::invoke(proj, a), std::invoke(proj, b)); });
+}
+template <class R, class Comp = std::less<>, class Proj = __shim::identity>
+void stable_sort(R&& r, Comp comp = {}, Proj proj = {}) {
+  std::stable_sort(std::begin(r), std::end(r),
+    [&](auto&& a, auto&& b){ return std::invoke(comp, std::invoke(proj, a), std::invoke(proj, b)); });
+}
+template <class R> void reverse(R&& r) { std::reverse(std::begin(r), std::end(r)); }
+template <class R> auto unique(R&& r) { return std::unique(std::begin(r), std::end(r)); }
+template <class R, class Pred> auto unique(R&& r, Pred p) { return std::unique(std::begin(r), std::end(r), p); }
+template <class R, class T, class Comp = std::less<>, class Proj = __shim::identity>
+auto lower_bound(R&& r, const T& value, Comp comp = {}, Proj proj = {}) {
+  return std::lower_bound(std::begin(r), std::end(r), value,
+    [&](auto&& el, auto&& val){ return std::invoke(comp, std::invoke(proj, el), val); });
+}
+template <class R, class T, class Comp = std::less<>, class Proj = __shim::identity>
+auto upper_bound(R&& r, const T& value, Comp comp = {}, Proj proj = {}) {
+  return std::upper_bound(std::begin(r), std::end(r), value,
+    [&](auto&& val, auto&& el){ return std::invoke(comp, val, std::invoke(proj, el)); });
+}
+template <class R, class T, class Comp = std::less<>, class Proj = __shim::identity>
+bool binary_search(R&& r, const T& value, Comp comp = {}, Proj proj = {}) {
+  auto it = ranges::lower_bound(r, value, comp, proj);
+  return it != std::end(r) && !std::invoke(comp, value, std::invoke(proj, *it));
+}
+// --- модифицирующие/копирующие ---
+template <class R, class O> auto copy(R&& r, O out) { return std::copy(std::begin(r), std::end(r), out); }
+template <class R, class O, class F, class Proj = __shim::identity>
+auto transform(R&& r, O out, F f, Proj proj = {}) {
+  auto first = std::begin(r), last = std::end(r);
+  for (; first != last; ++first, (void)++out) *out = std::invoke(f, std::invoke(proj, *first));
+  return out;
+}
+template <class R, class T> void fill(R&& r, const T& v) { std::fill(std::begin(r), std::end(r), v); }
+}} // namespace std::ranges
+#endif
+`;
+// Ловим обращения к нашему семейству алгоритмов. views НЕ детектим — шим их не даёт.
+const RANGES_DETECT_RE = /std::\s*ranges::/;
+
 export class CppRuntimeError extends Error {
   constructor(message, code) {
     super(message);
@@ -137,6 +324,8 @@ class CppRuntime {
     this._initPromise = null;
     this._diagBuffer = "";      // накопитель диагностики текущей компиляции
     this._collecting = false;
+    this._fmtWritten = false;   // вендоренные хедеры {fmt} уже в ФС воркера?
+    this._rangesWritten = false; // шим std::ranges уже в ФС воркера?
   }
 
   get ready() {
@@ -239,9 +428,25 @@ class CppRuntime {
     await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_LIB_NAME}`, CPPIO_LIB);
     sources.push(CPPIO_SOURCE_NAME);
 
+    // Бэкпорты C++20: если пользователь использует std::format / std::ranges —
+    // подкладываем нужную прелюдию и force-include'им её. В обычных программах
+    // ничего не добавляем (детект по исходникам).
+    const extraFlags = [];
+    const usesFormat = files.some((f) => SOURCE_RE.test(f.name) && FMT_DETECT_RE.test(f.content));
+    if (usesFormat) {
+      await this._ensureFmtVendor(dir);
+      extraFlags.push("-include", `${dir}/${FMT_SHIM_NAME}`);
+    }
+    const usesRanges = files.some((f) => SOURCE_RE.test(f.name) && RANGES_DETECT_RE.test(f.content));
+    if (usesRanges) {
+      await this._ensureRangesShim(dir);
+      extraFlags.push("-include", `${dir}/${RANGES_SHIM_NAME}`);
+    }
+
     const cmd = [
       "em++",
       ...flags,
+      ...extraFlags,
       ...this.options.moduleFlags,
       ...sources,
       "-o",
@@ -424,6 +629,38 @@ class CppRuntime {
       this._emception = null;
       this._initPromise = null;
     }
+  }
+
+  /**
+   * Лениво подкладывает header-only {fmt} в ФС воркера (один раз на жизнь рантайма).
+   * Исходники лежат same-origin в ./vendor/fmt/; пишем их ПЛОСКО в рабочий каталог
+   * вместе с прелюдией-шимом. Идемпотентно (флаг _fmtWritten).
+   */
+  async _ensureFmtVendor(dir) {
+    if (this._fmtWritten) return;
+    for (const name of FMT_HEADER_NAMES) {
+      const url = new URL(`./vendor/fmt/${name}`, _baseHref());
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new CppRuntimeError(
+          `Не удалось загрузить vendored-хедер ${name} (${resp.status})`,
+          "FMT_VENDOR_FETCH"
+        );
+      }
+      await this._emception.fileSystem.writeFile(`${dir}/${name}`, await resp.text());
+    }
+    await this._emception.fileSystem.writeFile(`${dir}/${FMT_SHIM_NAME}`, FMT_SHIM_SRC);
+    this._fmtWritten = true;
+  }
+
+  /**
+   * Кладёт шим std::ranges-алгоритмов в ФС воркера (один раз на жизнь рантайма).
+   * Шим — собственный код (не вендоринг), хранится строкой; пишем плоско в рабочий каталог.
+   */
+  async _ensureRangesShim(dir) {
+    if (this._rangesWritten) return;
+    await this._emception.fileSystem.writeFile(`${dir}/${RANGES_SHIM_NAME}`, RANGES_SHIM_SRC);
+    this._rangesWritten = true;
   }
 
   _validateFiles(files) {

@@ -170,10 +170,67 @@ exec EXC-лог) — в `~/emc/build/emception/*.mjs`, снять перед ф�
 Если нужны ranges/format ДО тяжёлой пересборки — вендорим header-only библиотеки и
 force-include'им прелюдию (механизм как у `__cppio.cpp`):
 - **`{fmt}`** (header-only) → рабочий `fmt::format`; тонкий шим `namespace std { using fmt::format; … }`
-  даёт и `std::format` (технически нестандартно, но на практике работает).
-- **range-v3** (header-only) → `ranges::sort`/`views`; алиас `namespace std { namespace ranges = ::ranges; }`
-  покрывает базовые случаи (API близок, но не 1:1 с `std::ranges`).
+  даёт и `std::format` (технически нестандартно, но на практике работает). — ✅ **РЕАЛИЗОВАНО (см. ниже)**.
+- **`std::ranges`-алгоритмы** — ✅ **РЕАЛИЗОВАНО** собственным тонким шимом поверх `<algorithm>`
+  (без range-v3, см. ниже). Ленивые **views** (`filter`/`transform`/`take`) — 🔜 отдельно (нужен range-v3).
 - Потоки так не лечатся — только пункт выше.
 
 Минусы: чуть дольше компиляция (большие хедеры), лёгкая «нестандартность» под капотом.
 Плюс: не трогает бинарный тулчейн, обратимо, даёт результат сразу.
+
+### `std::format` через `{fmt}` — ✅ ГОТОВО (2026-06-22)
+
+> Проверено в браузере (`assets/cpp-runtime/test.html`, тулчейн libc++14):
+> `std::format("{}+{}={} pi={:.2f}", 2,3,5,3.14159)` → `2+3=5 pi=3.14`; ширина/hex
+> (`{:>3}`,`{:#x}`) → `[  1] 0x10`; вариант с `#include <format>` → `hello world #42` (без конфликта).
+> Юнит-тесты 89/89 зелёные.
+
+Как сделано (всё в `assets/cpp-runtime/`):
+- **Вендоринг:** header-only `{fmt}` **10.2.1** (совместим с clang16/libc++14) — 3 файла
+  `vendor/fmt/{core.h,format.h,format-inl.h}` (достаточно для `fmt::format`).
+- **Прелюдия-шим** `__std_format.hpp` (константа `FMT_SHIM_SRC` в `cpp-runtime.js`):
+  `#define FMT_HEADER_ONLY` → `#include "format.h"` → `namespace std { using ::fmt::format; … }`,
+  всё под гардом `#if !defined(__cpp_lib_format)` + в конце `#define __cpp_lib_format 201907L`
+  (чтобы пользовательский `#include <format>` на libc++14 не переопределял имена).
+- **Детект использования** (`FMT_DETECT_RE = /std::\s*(?:v?format|make_format_args)/`): хедеры fmt
+  и `-include __std_format.hpp` добавляются в `em++` **только** когда исходник реально зовёт
+  `std::format`. Обычные программы компилируются без оверхеда (замер: ~9с против ~20с с fmt).
+- **Размещение в ФС воркера:** хедеры пишутся ПЛОСКО в `/working` (внутренние кавычечные
+  `#include "core.h"`/`"format-inl.h"` резолвятся в cwd — как `__cppio.cpp`), лениво и один раз
+  на жизнь рантайма (`_ensureFmtVendor`, флаг `_fmtWritten`). `-I`/вложенные папки не нужны.
+
+Известные ограничения:
+- Кастомные `std::formatter<MyType>` нужно специализировать как `fmt::formatter<MyType>`
+  (`std::formatter` здесь — using-декларация на fmt, явная специализация в `std` для неё невозможна).
+- `std::print`/`std::println` (C++23) не проброшены — вне объёма C++20.
+- Коллизия имени файла пользователя ровно `core.h`/`format.h`/`format-inl.h` (в школьном C++ — ничтожна).
+
+### `std::ranges`-алгоритмы (без views) — ✅ ГОТОВО (2026-06-22)
+
+> Проверено в браузере (`assets/cpp-runtime/test.html`, кнопка 8, тулчейн libc++14):
+> `ranges::sort/max/min/count/count_if/find/all_of/binary_search/reverse/max_element/transform`,
+> **проекции на член** (`ranges::sort(ppl, {}, &P::age)` → `Bob(25) Ann(30) Cid(40)`,
+> `max_element(..., &P::age)->name` → `Cid`). Совместно с `std::format` в одной программе — ок.
+> Юнит-тесты 89/89 зелёные.
+
+Почему НЕ range-v3:
+- В libc++14 тулчейна ranges-алгоритмов нет вообще (проверено детектом: `sort/find/count/for_each/
+  all_of/…` все отсутствуют) → шим добавляет их в `std::ranges` **без коллизий**.
+- Полный range-v3 — сотни хедеров, ~2 МБ, и тяжёлая компиляция (риск упереться в `compileTimeoutMs`
+  45с на медленном WASM-clang). Тонкий шим парсится за ~доли секунды.
+
+Как сделано (`assets/cpp-runtime/cpp-runtime.js`):
+- **Шим** `__std_ranges.hpp` (константа `RANGES_SHIM_SRC`) — тонкие range-обёртки над `<algorithm>`
+  в `namespace std::ranges`, под гардом `#if !defined(__cpp_lib_ranges)`. Проекции/предикаты/компараторы
+  идут через `std::invoke` → работают указатели на член (`&T::field`) и member-функции.
+- **Детект** `RANGES_DETECT_RE = /std::\s*ranges::/` → `-include __std_ranges.hpp` добавляется только
+  при использовании `std::ranges::`. Запись в ФС воркера — лениво один раз (`_ensureRangesShim`, `_rangesWritten`).
+- Покрытие: `all_of/any_of/none_of/for_each/find/find_if/find_if_not/count/count_if/min_element/
+  max_element/min/max/sort/stable_sort/reverse/unique/lower_bound/upper_bound/binary_search/copy/transform/fill`.
+
+Известные ограничения:
+- **Ленивые views не реализованы** (`views::filter/transform/take/drop/…`) — нужен range-v3 (следующий
+  инкремент). `views::iota`/`common` в libc++14 уже есть и не трогаются.
+- Возвращаемые типы упрощены до итераторов/значений (не `subrange`/`*_result`-структуры C++20) — на
+  практике совместимо с типовым кодом, но не 1:1 со стандартом.
+- `std::ranges::less`/`greater` не добавляются — использовать `std::less<>{}`/`std::greater<>{}`.
