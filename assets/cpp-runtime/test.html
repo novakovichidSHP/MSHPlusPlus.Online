@@ -32,13 +32,14 @@
     <button id="btn-fmt" disabled>6 · std::format (бэкпорт)</button>
     <button id="btn-fmt-hdr" disabled>7 · std::format + #include &lt;format&gt;</button>
     <button id="btn-ranges" disabled>8 · std::ranges (бэкпорт)</button>
+    <button id="btn-views" disabled>9 · std::views (бэкпорт)</button>
     <button id="btn-cancel" disabled>⏹ cancel</button>
   </div>
   <div id="status" class="dim">Ожидание init…</div>
   <pre id="log"></pre>
 
 <script type="module">
-import { createCppRuntime } from "./cpp-runtime.js?v=2";
+import { createCppRuntime } from "./cpp-runtime.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log"), statusEl = $("status");
@@ -46,7 +47,7 @@ function log(s, cls){ const t=document.createElement("span"); if(cls)t.className
 function status(s, cls){ statusEl.textContent=s; statusEl.className=cls||"dim"; }
 
 let rt = null;
-const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop","btn-fmt","btn-fmt-hdr","btn-ranges"];
+const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop","btn-fmt","btn-fmt-hdr","btn-ranges","btn-views"];
 const setRunEnabled = (on)=>runBtns.forEach(id=>$(id).disabled=!on);
 
 $("btn-init").onclick = async () => {
@@ -161,6 +162,23 @@ int main(){
   std::ranges::sort(ppl, {}, &P::age);            // проекция на член
   for (auto& p : ppl) std::cout << p.name << '(' << p.age << ") ";
   std::cout << "\\noldest=" << std::ranges::max_element(ppl, {}, &P::age)->name << "\\n";
+  return 0;
+}`}],
+  "");
+
+$("btn-views").onclick = ()=>compileRun("std::views (бэкпорт filter/take/drop)",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <vector>
+#include <ranges>
+int main(){
+  std::vector<int> v{1,2,3,4,5,6,7,8};
+  auto pretty=[](auto&& rng){ for(int x:rng) std::cout<<x<<' '; std::cout<<"\\n"; };
+  pretty(v | std::views::filter([](int x){return x%2==0;}));                 // 2 4 6 8
+  pretty(v | std::views::drop(2) | std::views::take(3));                     // 3 4 5
+  pretty(v | std::views::filter([](int x){return x%2==1;})                   // 10 30 50 70
+           | std::views::transform([](int x){return x*10;}));
+  pretty(v | std::views::take_while([](int x){return x<5;}));                // 1 2 3 4
   return 0;
 }`}],
   "");

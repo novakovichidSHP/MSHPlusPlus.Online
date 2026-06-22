@@ -299,8 +299,175 @@ template <class R, class T> void fill(R&& r, const T& v) { std::fill(std::begin(
 }} // namespace std::ranges
 #endif
 `;
-// Ловим обращения к нашему семейству алгоритмов. views НЕ детектим — шим их не даёт.
+// Ловим обращения к семейству ranges-алгоритмов (sort/find/...).
 const RANGES_DETECT_RE = /std::\s*ranges::/;
+
+// --- Бэкпорт C++20 ленивых std::views (filter/take/drop/take_while/drop_while) ---
+// В libc++14 штатно есть views::all/transform/reverse/iota/common/counted и рабочая
+// pipe-машинерия (проверено), но НЕТ filter/take/drop. Добавляем их как полноценные
+// view (наследуют view_interface, оборачивают источник через штатный views::all),
+// поэтому они композятся со штатными views через существующий operator|.
+// Реализованы как ленивые (важно для idiom'ов вроде filter|transform без материализации).
+const VIEWS_SHIM_NAME = "__std_views.hpp";
+const VIEWS_SHIM_SRC = `#pragma once
+#include <ranges>
+#include <iterator>
+#include <functional>
+#include <utility>
+#if !defined(__cpp_lib_ranges)
+namespace std { namespace ranges {
+template <class V, class Pred>
+class __shim_filter_view : public view_interface<__shim_filter_view<V,Pred>> {
+  V base_; Pred pred_;
+public:
+  __shim_filter_view(V b, Pred p) : base_(std::move(b)), pred_(std::move(p)) {}
+  class iterator {
+  public:
+    using BaseIt = iterator_t<V>;
+    using iterator_concept = std::input_iterator_tag;
+    using iterator_category = std::input_iterator_tag;
+    using value_type = range_value_t<V>;
+    using difference_type = range_difference_t<V>;
+    using reference = range_reference_t<V>;
+  private:
+    BaseIt cur_{}; BaseIt end_{}; const Pred* pred_ = nullptr;
+    void satisfy(){ while(cur_!=end_ && !std::invoke(*pred_, *cur_)) ++cur_; }
+  public:
+    iterator() = default;
+    iterator(BaseIt c, BaseIt e, const Pred* p):cur_(c),end_(e),pred_(p){ satisfy(); }
+    reference operator*() const { return *cur_; }
+    iterator& operator++(){ ++cur_; satisfy(); return *this; }
+    void operator++(int){ ++*this; }
+    bool operator==(const iterator& o) const { return cur_==o.cur_; }
+    bool operator!=(const iterator& o) const { return cur_!=o.cur_; }
+  };
+  iterator begin(){ return iterator(ranges::begin(base_), ranges::end(base_), &pred_); }
+  iterator end(){ return iterator(ranges::end(base_), ranges::end(base_), &pred_); }
+};
+template <class V>
+class __shim_take_view : public view_interface<__shim_take_view<V>> {
+  V base_; range_difference_t<V> count_ = 0;
+public:
+  __shim_take_view(V b, range_difference_t<V> n):base_(std::move(b)),count_(n){}
+  class iterator {
+  public:
+    using BaseIt = iterator_t<V>;
+    using iterator_concept = std::input_iterator_tag;
+    using iterator_category = std::input_iterator_tag;
+    using value_type = range_value_t<V>;
+    using difference_type = range_difference_t<V>;
+    using reference = range_reference_t<V>;
+  private:
+    BaseIt cur_{}; BaseIt end_{}; difference_type n_ = 0;
+  public:
+    iterator() = default;
+    iterator(BaseIt c, BaseIt e, difference_type n):cur_(c),end_(e),n_(n){}
+    reference operator*() const { return *cur_; }
+    iterator& operator++(){ ++cur_; --n_; return *this; }
+    void operator++(int){ ++*this; }
+    bool atEnd() const { return n_<=0 || cur_==end_; }
+    bool operator==(const iterator& o) const { return (atEnd()&&o.atEnd())?true:(cur_==o.cur_); }
+    bool operator!=(const iterator& o) const { return !(*this==o); }
+  };
+  iterator begin(){ return iterator(ranges::begin(base_), ranges::end(base_), count_); }
+  iterator end(){ return iterator(ranges::end(base_), ranges::end(base_), 0); }
+};
+template <class V>
+class __shim_drop_view : public view_interface<__shim_drop_view<V>> {
+  V base_; range_difference_t<V> count_ = 0;
+public:
+  __shim_drop_view(V b, range_difference_t<V> n):base_(std::move(b)),count_(n){}
+  auto begin(){ auto it=ranges::begin(base_); auto e=ranges::end(base_); auto n=count_; while(n>0&&it!=e){++it;--n;} return it; }
+  auto end(){ return ranges::end(base_); }
+};
+template <class V, class Pred>
+class __shim_take_while_view : public view_interface<__shim_take_while_view<V,Pred>> {
+  V base_; Pred pred_;
+public:
+  __shim_take_while_view(V b, Pred p):base_(std::move(b)),pred_(std::move(p)){}
+  class iterator {
+  public:
+    using BaseIt = iterator_t<V>;
+    using iterator_concept = std::input_iterator_tag;
+    using iterator_category = std::input_iterator_tag;
+    using value_type = range_value_t<V>;
+    using difference_type = range_difference_t<V>;
+    using reference = range_reference_t<V>;
+  private:
+    BaseIt cur_{}; BaseIt end_{}; const Pred* pred_=nullptr;
+  public:
+    iterator()=default;
+    iterator(BaseIt c, BaseIt e, const Pred* p):cur_(c),end_(e),pred_(p){}
+    reference operator*() const { return *cur_; }
+    iterator& operator++(){ ++cur_; return *this; }
+    void operator++(int){ ++*this; }
+    bool atEnd() const { return cur_==end_ || !std::invoke(*pred_, *cur_); }
+    bool operator==(const iterator& o) const { return (atEnd()&&o.atEnd())?true:(cur_==o.cur_); }
+    bool operator!=(const iterator& o) const { return !(*this==o); }
+  };
+  iterator begin(){ return iterator(ranges::begin(base_), ranges::end(base_), &pred_); }
+  iterator end(){ return iterator(ranges::end(base_), ranges::end(base_), &pred_); }
+};
+template <class V, class Pred>
+class __shim_drop_while_view : public view_interface<__shim_drop_while_view<V,Pred>> {
+  V base_; Pred pred_;
+public:
+  __shim_drop_while_view(V b, Pred p):base_(std::move(b)),pred_(std::move(p)){}
+  auto begin(){ auto it=ranges::begin(base_); auto e=ranges::end(base_); while(it!=e && std::invoke(pred_,*it)) ++it; return it; }
+  auto end(){ return ranges::end(base_); }
+};
+namespace views {
+template <class Fn> struct __shim_closure { Fn fn;
+  template <class R> auto operator()(R&& r) const { return fn(std::forward<R>(r)); } };
+template <class Fn> __shim_closure(Fn) -> __shim_closure<Fn>;
+template <class R, class Fn> auto operator|(R&& r, const __shim_closure<Fn>& c){ return c(std::forward<R>(r)); }
+struct __filter_fn {
+  template <class R, class Pred> auto operator()(R&& r, Pred pred) const {
+    auto v = std::views::all(std::forward<R>(r));
+    return __shim_filter_view<decltype(v),Pred>(std::move(v), std::move(pred)); }
+  template <class Pred> auto operator()(Pred pred) const {
+    return __shim_closure{[p=std::move(pred)](auto&& r){ return __filter_fn{}(std::forward<decltype(r)>(r), p); }}; }
+};
+inline constexpr __filter_fn filter{};
+struct __take_fn {
+  template <class R> auto operator()(R&& r, std::ptrdiff_t n) const {
+    auto v = std::views::all(std::forward<R>(r));
+    return __shim_take_view<decltype(v)>(std::move(v), static_cast<range_difference_t<decltype(v)>>(n)); }
+  auto operator()(std::ptrdiff_t n) const {
+    return __shim_closure{[n](auto&& r){ return __take_fn{}(std::forward<decltype(r)>(r), n); }}; }
+};
+inline constexpr __take_fn take{};
+struct __drop_fn {
+  template <class R> auto operator()(R&& r, std::ptrdiff_t n) const {
+    auto v = std::views::all(std::forward<R>(r));
+    return __shim_drop_view<decltype(v)>(std::move(v), static_cast<range_difference_t<decltype(v)>>(n)); }
+  auto operator()(std::ptrdiff_t n) const {
+    return __shim_closure{[n](auto&& r){ return __drop_fn{}(std::forward<decltype(r)>(r), n); }}; }
+};
+inline constexpr __drop_fn drop{};
+struct __take_while_fn {
+  template <class R, class Pred> auto operator()(R&& r, Pred pred) const {
+    auto v=std::views::all(std::forward<R>(r));
+    return __shim_take_while_view<decltype(v),Pred>(std::move(v),std::move(pred)); }
+  template <class Pred> auto operator()(Pred pred) const {
+    return __shim_closure{[p=std::move(pred)](auto&& r){ return __take_while_fn{}(std::forward<decltype(r)>(r),p); }}; }
+};
+inline constexpr __take_while_fn take_while{};
+struct __drop_while_fn {
+  template <class R, class Pred> auto operator()(R&& r, Pred pred) const {
+    auto v=std::views::all(std::forward<R>(r));
+    return __shim_drop_while_view<decltype(v),Pred>(std::move(v),std::move(pred)); }
+  template <class Pred> auto operator()(Pred pred) const {
+    return __shim_closure{[p=std::move(pred)](auto&& r){ return __drop_while_fn{}(std::forward<decltype(r)>(r),p); }}; }
+};
+inline constexpr __drop_while_fn drop_while{};
+}
+}}
+#endif
+`;
+// Детектим только недостающие views (filter/take/drop, вкл. take_while/drop_while).
+// transform/reverse/iota и пр. в libc++14 штатные — для них шим не нужен.
+const VIEWS_DETECT_RE = /views::\s*(?:filter|take|drop)/;
 
 export class CppRuntimeError extends Error {
   constructor(message, code) {
@@ -326,6 +493,7 @@ class CppRuntime {
     this._collecting = false;
     this._fmtWritten = false;   // вендоренные хедеры {fmt} уже в ФС воркера?
     this._rangesWritten = false; // шим std::ranges уже в ФС воркера?
+    this._viewsWritten = false;  // шим std::views уже в ФС воркера?
   }
 
   get ready() {
@@ -441,6 +609,11 @@ class CppRuntime {
     if (usesRanges) {
       await this._ensureRangesShim(dir);
       extraFlags.push("-include", `${dir}/${RANGES_SHIM_NAME}`);
+    }
+    const usesViews = files.some((f) => SOURCE_RE.test(f.name) && VIEWS_DETECT_RE.test(f.content));
+    if (usesViews) {
+      await this._ensureViewsShim(dir);
+      extraFlags.push("-include", `${dir}/${VIEWS_SHIM_NAME}`);
     }
 
     const cmd = [
@@ -661,6 +834,16 @@ class CppRuntime {
     if (this._rangesWritten) return;
     await this._emception.fileSystem.writeFile(`${dir}/${RANGES_SHIM_NAME}`, RANGES_SHIM_SRC);
     this._rangesWritten = true;
+  }
+
+  /**
+   * Кладёт шим ленивых std::views (filter/take/drop/…) в ФС воркера (один раз).
+   * Собственный код; плоско в рабочий каталог.
+   */
+  async _ensureViewsShim(dir) {
+    if (this._viewsWritten) return;
+    await this._emception.fileSystem.writeFile(`${dir}/${VIEWS_SHIM_NAME}`, VIEWS_SHIM_SRC);
+    this._viewsWritten = true;
   }
 
   _validateFiles(files) {
