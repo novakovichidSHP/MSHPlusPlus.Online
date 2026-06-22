@@ -173,9 +173,9 @@ force-include'им прелюдию (механизм как у `__cppio.cpp`):
   даёт и `std::format` (технически нестандартно, но на практике работает). — ✅ **РЕАЛИЗОВАНО (см. ниже)**.
 - **`std::ranges`-алгоритмы** — ✅ **РЕАЛИЗОВАНО** собственным тонким шимом поверх `<algorithm>`
   (без range-v3, см. ниже).
-- **Ленивые `std::views`** (`filter`/`take`/`drop`/`take_while`/`drop_while`) — ✅ **РЕАЛИЗОВАНО**
-  собственными `view`-классами (см. ниже), БЕЗ range-v3: в libc++14 уже есть рабочая pipe-машинерия
-  и `views::all/transform/reverse/iota/common/counted`, не хватало только перечисленных.
+- **Ленивые `std::views`** (`filter`/`take`/`drop`/`take_while`/`drop_while`/`keys`/`values`/`elements`) —
+  ✅ **РЕАЛИЗОВАНО** собственными `view`-классами (см. ниже), БЕЗ range-v3: в libc++14 уже есть рабочая
+  pipe-машинерия и `views::all/transform/reverse/iota/common/counted`, не хватало только перечисленных.
 - Потоки так не лечатся — только пункт выше.
 
 Минусы: чуть дольше компиляция (большие хедеры), лёгкая «нестандартность» под капотом.
@@ -241,7 +241,8 @@ force-include'им прелюдию (механизм как у `__cppio.cpp`):
 > Проверено в браузере (`assets/cpp-runtime/test.html`, кнопка 9, тулчейн libc++14):
 > `v | views::filter(even)` → `2 4 6 8`; `v | drop(2) | take(3)` → `3 4 5`;
 > `v | filter(odd) | views::transform(*10)` → `10 30 50 70` (мой filter + штатный transform);
-> `take_while(<5)` → `1 2 3 4`. Совместно с `ranges::sort`+`std::format` в одной программе — ок.
+> `take_while(<5)` → `1 2 3 4`; `map | keys` → `ann bob cid`, `map | values | filter(>=30)` → `30 40`,
+> `vec<tuple> | elements<1>` → `a b`. Совместно с `ranges::sort`+`std::format` — ок.
 > Юнит-тесты 89/89 зелёные.
 
 Почему НЕ range-v3:
@@ -254,10 +255,13 @@ force-include'им прелюдию (механизм как у `__cppio.cpp`):
 
 Как сделано (`assets/cpp-runtime/cpp-runtime.js`, `VIEWS_SHIM_SRC` → `__std_views.hpp`):
 - `__shim_filter_view`/`__shim_take_view`/`__shim_drop_view`/`__shim_take_while_view`/
-  `__shim_drop_while_view` — ленивые view с input-итераторами (`iterator_concept = input_iterator_tag`).
-- Адаптор-замыкания (`views::filter`/`take`/`drop`/`take_while`/`drop_while`) + собственный
-  `operator|`, ограниченный своим closure-типом (без конфликта со штатным `|` libc++).
-- Гард `#if !defined(__cpp_lib_ranges)`; детект `VIEWS_DETECT_RE = /views::\s*(?:filter|take|drop)/`
+  `__shim_drop_while_view`/`__shim_elements_view<N>` — ленивые view с input-итераторами
+  (`iterator_concept = input_iterator_tag`).
+- Адаптор-замыкания (`views::filter`/`take`/`drop`/`take_while`/`drop_while`/`elements<N>`/`keys`/
+  `values`) + собственный `operator|`, ограниченный своими closure-типами (без конфликта со штатным
+  `|` libc++). `keys`=`elements<0>`, `values`=`elements<1>` (для итерации по `std::map`/парам).
+- Гард `#if !defined(__cpp_lib_ranges)`; детект
+  `VIEWS_DETECT_RE = /views::\s*(?:filter|take|drop|keys|values|elements)/`
   (ловит и `take_while`/`drop_while`); запись в ФС воркера лениво один раз (`_ensureViewsShim`).
 
 Тонкости/ограничения:
@@ -265,4 +269,4 @@ force-include'им прелюдию (механизм как у `__cppio.cpp`):
   (учтён P2325), потому что штатный `transform_view` держит `ref_view`.
 - `filter`/`take`/`take_while` — input-итераторы (одно-проходные); `reverse` поверх них работать не
   будет (нужен bidirectional) — это совпадает с поведением стандартных адаптеров.
-- Прочие views (`join`/`split`/`elements`/`keys`/`values`/`enumerate`/`zip`) не добавлены — вне MVP.
+- Прочие views (`join`/`split`/`enumerate`/`zip`) не добавлены — вне MVP.

@@ -33,13 +33,14 @@
     <button id="btn-fmt-hdr" disabled>7 · std::format + #include &lt;format&gt;</button>
     <button id="btn-ranges" disabled>8 · std::ranges (бэкпорт)</button>
     <button id="btn-views" disabled>9 · std::views (бэкпорт)</button>
+    <button id="btn-views-map" disabled>10 · views keys/values/elements</button>
     <button id="btn-cancel" disabled>⏹ cancel</button>
   </div>
   <div id="status" class="dim">Ожидание init…</div>
   <pre id="log"></pre>
 
 <script type="module">
-import { createCppRuntime } from "./cpp-runtime.js?v=3";
+import { createCppRuntime } from "./cpp-runtime.js?v=4";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log"), statusEl = $("status");
@@ -47,7 +48,7 @@ function log(s, cls){ const t=document.createElement("span"); if(cls)t.className
 function status(s, cls){ statusEl.textContent=s; statusEl.className=cls||"dim"; }
 
 let rt = null;
-const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop","btn-fmt","btn-fmt-hdr","btn-ranges","btn-views"];
+const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop","btn-fmt","btn-fmt-hdr","btn-ranges","btn-views","btn-views-map"];
 const setRunEnabled = (on)=>runBtns.forEach(id=>$(id).disabled=!on);
 
 $("btn-init").onclick = async () => {
@@ -179,6 +180,21 @@ int main(){
   pretty(v | std::views::filter([](int x){return x%2==1;})                   // 10 30 50 70
            | std::views::transform([](int x){return x*10;}));
   pretty(v | std::views::take_while([](int x){return x<5;}));                // 1 2 3 4
+  return 0;
+}`}],
+  "");
+
+$("btn-views-map").onclick = ()=>compileRun("views keys/values/elements",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <map>
+#include <string>
+#include <ranges>
+int main(){
+  std::map<std::string,int> m{{"ann",30},{"bob",25},{"cid",40}};
+  for(auto& k : m | std::views::keys) std::cout<<k<<' '; std::cout<<"\\n";   // ann bob cid
+  for(int a : m | std::views::values | std::views::filter([](int x){return x>=30;}))
+    std::cout<<a<<' '; std::cout<<"\\n";                                       // 30 40
   return 0;
 }`}],
   "");
