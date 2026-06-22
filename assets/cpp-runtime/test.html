@@ -29,13 +29,16 @@
     <button id="btn-sort" disabled>3 · sort + cin (batch stdin)</button>
     <button id="btn-err" disabled>4 · ошибка компиляции</button>
     <button id="btn-loop" disabled>5 · бесконечный цикл (таймаут)</button>
+    <button id="btn-fmt" disabled>6 · std::format (бэкпорт)</button>
+    <button id="btn-fmt-hdr" disabled>7 · std::format + #include &lt;format&gt;</button>
+    <button id="btn-ranges" disabled>8 · std::ranges (бэкпорт)</button>
     <button id="btn-cancel" disabled>⏹ cancel</button>
   </div>
   <div id="status" class="dim">Ожидание init…</div>
   <pre id="log"></pre>
 
 <script type="module">
-import { createCppRuntime } from "./cpp-runtime.js";
+import { createCppRuntime } from "./cpp-runtime.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log"), statusEl = $("status");
@@ -43,7 +46,7 @@ function log(s, cls){ const t=document.createElement("span"); if(cls)t.className
 function status(s, cls){ statusEl.textContent=s; statusEl.className=cls||"dim"; }
 
 let rt = null;
-const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop"];
+const runBtns = ["btn-hello","btn-sort","btn-err","btn-loop","btn-fmt","btn-fmt-hdr","btn-ranges"];
 const setRunEnabled = (on)=>runBtns.forEach(id=>$(id).disabled=!on);
 
 $("btn-init").onclick = async () => {
@@ -53,6 +56,7 @@ $("btn-init").onclick = async () => {
   log("→ init() с baseUrl="+$("base").value, "dim");
   try {
     await rt.init((ev)=>log("  ["+ev.phase+"] "+(ev.message||""), "dim"));
+    window.__rt = rt;  // для проб через консоль/eval
     status("Готово — компилятор поднят ✓", "ok");
     log("✓ init завершён", "ok");
     setRunEnabled(true);
@@ -116,6 +120,50 @@ $("btn-loop").onclick = ()=>compileRun("бесконечный цикл (тай�
   [{name:"main.cpp", content:
 `int main(){ for(;;){} }`}],
   "", {timeoutMs:3000});
+
+$("btn-fmt").onclick = ()=>compileRun("std::format (бэкпорт {fmt})",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <string>
+int main(){
+  std::string s = std::format("{}+{}={} pi={:.2f}", 2, 3, 5, 3.14159);
+  std::cout << s << "\\n";
+  for (int i = 1; i <= 3; ++i)
+    std::cout << std::format("[{:>3}] {:#x}\\n", i, i * 16);
+  return 0;
+}`}],
+  "");
+
+$("btn-fmt-hdr").onclick = ()=>compileRun("std::format + #include <format>",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <format>
+int main(){
+  std::cout << std::format("hello {} #{}\\n", "world", 42);
+  return 0;
+}`}],
+  "");
+
+$("btn-ranges").onclick = ()=>compileRun("std::ranges (бэкпорт алгоритмов)",
+  [{name:"main.cpp", content:
+`#include <iostream>
+#include <vector>
+#include <string>
+#include <ranges>
+struct P { std::string name; int age; };
+int main(){
+  std::vector<int> v{5,3,8,1,9,3};
+  std::ranges::sort(v);
+  std::cout << "max=" << std::ranges::max(v)
+            << " even=" << std::ranges::count_if(v,[](int x){return x%2==0;})
+            << " has8=" << std::ranges::binary_search(v,8) << "\\n";
+  std::vector<P> ppl{{"Ann",30},{"Bob",25},{"Cid",40}};
+  std::ranges::sort(ppl, {}, &P::age);            // проекция на член
+  for (auto& p : ppl) std::cout << p.name << '(' << p.age << ") ";
+  std::cout << "\\noldest=" << std::ranges::max_element(ppl, {}, &P::age)->name << "\\n";
+  return 0;
+}`}],
+  "");
 
 $("btn-cancel").onclick = ()=>{ rt && rt.cancelRun(); log("⏹ cancelRun()", "warn"); };
 </script>
