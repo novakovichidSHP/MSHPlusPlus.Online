@@ -63,8 +63,9 @@ const MOBILE_ACTION_LABELS = {
   export: "⬆️",
   import: "⬇️"
 };
-const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "Программа запросит ввод — введите строку и нажмите Enter…";
-const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "Введите строку, Enter — отправить…";
+// Инлайн-ввод в консоли — без подсказок-плейсхолдеров (терминальный стиль).
+const CONSOLE_INPUT_PLACEHOLDER_DESKTOP = "";
+const CONSOLE_INPUT_PLACEHOLDER_MOBILE = "";
 
 const VALID_FILENAME = /^[A-Za-z0-9._\-\u0400-\u04FF]+$/;
 // \u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u043E\u0432 C++ (\u0435\u0434\u0438\u043D\u0438\u0446\u044B \u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 + \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438). \u0418\u043C\u044F \u0431\u0435\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u2192 .cpp.
@@ -584,28 +585,40 @@ function bindUi() {
       sendConsoleLine();
     }
   });
+  // Поле растёт под длину ввода (инлайн-каретка в потоке вывода).
+  els.consoleInput.addEventListener("input", autoSizeConsoleInput);
+  autoSizeConsoleInput();
+  // Клик по консоли фокусирует поле ввода (как в терминале), не мешая выделению текста.
+  els.consoleOutput.addEventListener("click", (event) => {
+    if (event.target === els.consoleInput) return;
+    const selection = window.getSelection();
+    if (selection &amp;&amp; String(selection).length) return;
+    els.consoleInput.focus();
+  });
 
   document.addEventListener("keydown", (event) => {
     if (!els.modal.classList.contains("hidden")) {
       return;
     }
-    // Run code
-    if (event.key === "F8" || (event.altKey &amp;&amp; event.key === "r")) {
+    // Хоткеи сравниваем по event.code (физическая клавиша), а не event.key:
+    // на русской раскладке event.key для Alt+R = "к" и т.п. → комбинации не ловились.
+    // Run code (F8 / Alt+R)
+    if (event.key === "F8" || (event.altKey &amp;&amp; event.code === "KeyR")) {
       event.preventDefault();
       runActiveFile();
     }
-    // Stop execution
-    if (event.altKey &amp;&amp; event.key === "x") {
+    // Stop execution (Alt+X)
+    if (event.altKey &amp;&amp; event.code === "KeyX") {
       event.preventDefault();
       stopRun();
     }
-    // Clear console
-    if (event.altKey &amp;&amp; event.key === "c") {
+    // Clear console (Alt+C)
+    if (event.altKey &amp;&amp; event.code === "KeyC") {
       event.preventDefault();
       clearConsole();
     }
     // Focus on editor (Alt+1)
-    if (event.altKey &amp;&amp; event.key === "1") {
+    if (event.altKey &amp;&amp; (event.code === "Digit1" || event.code === "Numpad1")) {
       event.preventDefault();
       if (state.editorAdapter) {
         state.editorAdapter.focus();
@@ -614,7 +627,7 @@ function bindUi() {
       }
     }
     // Focus on console input (Alt+2)
-    if (event.altKey &amp;&amp; event.key === "2") {
+    if (event.altKey &amp;&amp; (event.code === "Digit2" || event.code === "Numpad2")) {
       event.preventDefault();
       els.consoleInput.focus();
     }
@@ -1813,6 +1826,9 @@ function applyEditorSettings() {
   if (els.editorWrap) {
     els.editorWrap.style.setProperty("--code-font-size", `${fontSize}px`);
     els.editorWrap.style.setProperty("--editor-font-size", String(fontSize));
+    // Высота строки тоже должна следовать за размером шрифта, иначе при A-/A+
+    // меняется только ширина глифов, а число видимых строк не растёт.
+    els.editorWrap.style.setProperty("--code-line-height", `${Math.round(fontSize * 1.5)}px`);
   }
   if (els.editor) {
     els.editor.style.tabSize = state.settings.tabSize;
@@ -2898,16 +2914,33 @@ const CRC_TABLE = (() => {
   return table;
 })();
 function clearConsole() {
+  // Поле инлайн-ввода живёт ВНУТРИ потока консоли (всегда последним) — при очистке
+  // удаляем только вывод и возвращаем поле в конец.
+  const input = els.consoleInput;
   els.consoleOutput.textContent = "";
+  if (input) els.consoleOutput.appendChild(input);
   state.outputBytes = 0;
 }
 
+/**
+ * Вставляет узел в поток консоли ПЕРЕД полем инлайн-ввода, чтобы каретка ввода
+ * всегда оставалась в самом конце вывода (как в настоящем терминале).
+ */
+function consoleInsert(node) {
+  const anchor = els.consoleInput;
+  if (anchor &amp;&amp; anchor.parentNode === els.consoleOutput) {
+    els.consoleOutput.insertBefore(node, anchor);
+  } else {
+    els.consoleOutput.appendChild(node);
+  }
+}
+
 /** Метка сегмента консоли (КОМПИЛЯЦИЯ / ВЫВОД ПРОГРАММЫ) — как в макете. */
-function appendConsoleLabel(text) {
+function appendConsoleLabel(text, variant) {
   const label = document.createElement("div");
-  label.className = "seg-label";
+  label.className = variant ? `seg-label ${variant}` : "seg-label";
   label.textContent = text;
-  els.consoleOutput.appendChild(label);
+  consoleInsert(label);
   els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
 
@@ -2916,8 +2949,8 @@ function appendConsoleStyled(text, className) {
   const span = document.createElement("span");
   span.className = className;
   span.textContent = String(text ?? "");
-  els.consoleOutput.appendChild(span);
-  els.consoleOutput.appendChild(document.createElement("br"));
+  consoleInsert(span);
+  consoleInsert(document.createElement("br"));
   els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
 
@@ -2932,16 +2965,18 @@ function appendConsole(text, isError) {
   const chunkBytes = encoder.encode(normalized).length;
   state.outputBytes += chunkBytes;
   if (state.outputBytes > CONFIG.MAX_OUTPUT_BYTES) {
-    els.consoleOutput.appendChild(document.createTextNode("\n[вывод обрезан]\n"));
+    consoleInsert(document.createTextNode("\n[вывод обрезан]\n"));
     return;
   }
   if (isError) {
     const span = document.createElement("span");
     span.className = "console-error";
     appendConsoleText(span, normalized);
-    els.consoleOutput.appendChild(span);
+    consoleInsert(span);
   } else {
-    appendConsoleText(els.consoleOutput, normalized);
+    const frag = document.createDocumentFragment();
+    appendConsoleText(frag, normalized);
+    consoleInsert(frag);
   }
   els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
@@ -2980,10 +3015,24 @@ function sendConsoleLine() {
     return;
   }
   const line = els.consoleInput ? els.consoleInput.value : "";
-  appendConsoleStyled(line, "c-input"); // эхо введённой строки
+  // Эхо набранного — тем же цветом, что и вывод, прямо в потоке (как терминал):
+  // текст «фиксируется» в строке промпта, затем перевод строки (нажатый Enter).
+  consoleInsert(document.createTextNode(line));
+  consoleInsert(document.createElement("br"));
   cppEngine.provideInput(line + "\n");
-  if (els.consoleInput) els.consoleInput.value = "";
+  if (els.consoleInput) {
+    els.consoleInput.value = "";
+    autoSizeConsoleInput();
+  }
   setConsoleInputWaiting(false);
+  els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
+}
+
+/** Ширина инлайн-поля = длине ввода (моноширинный шрифт → 1 символ = 1ch). */
+function autoSizeConsoleInput() {
+  const input = els.consoleInput;
+  if (!input) return;
+  input.style.width = `${(input.value.length || 0) + 1}ch`;
 }
 
 function setConsoleInputWaiting(waiting) {
@@ -2996,8 +3045,9 @@ function setConsoleInputWaiting(waiting) {
     setUiCard("console");
   }
   if (waiting) {
+    autoSizeConsoleInput();
     els.consoleInput.focus();
-    els.consoleInput.select();
+    els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
   }
 }
 
@@ -3241,7 +3291,7 @@ async function runActiveFile() {
   // Запускаем с пустым stdin. Когда программа доходит до std::cin и буфер пуст,
   // движок шлёт onNeedInput → подсвечиваем поле ввода; пользователь вводит строку
   // вживую (Enter → provideInput), программа продолжается. Как в обычной консоли.
-  appendConsoleLabel("Вывод программы");
+  appendConsoleLabel("Вывод программы", "ok");
   updateRunStatus("running");
   state.running = true;
   // Файлы-данные (не-исходники) кладём в MEMFS программы → доступны для
@@ -3280,7 +3330,7 @@ async function runActiveFile() {
     appendConsole(`\n${runResult.error}\n`, true);
     updateRunStatus("error");
   } else {
-    appendConsoleStyled(`Программа завершена с кодом ${runResult.exitCode ?? 0}`,
+    appendConsoleStyled(`\nПрограмма завершена с кодом ${runResult.exitCode ?? 0}`,
       runResult.exitCode ? "console-error" : "c-dim");
     updateRunStatus("done");
   }
@@ -3778,13 +3828,13 @@ async function dbDelete(storeName, key) {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#appendConsoleLabel">appendConsoleLabel</a></li><li><a href="global.html#appendConsoleStyled">appendConsoleStyled</a></li><li><a href="global.html#appendDiagnosticLine">appendDiagnosticLine</a></li><li><a href="global.html#applyOutputFiles">applyOutputFiles</a></li><li><a href="global.html#applyResponsiveCardState">applyResponsiveCardState</a></li><li><a href="global.html#bindUi">bindUi</a></li><li><a href="global.html#createUuid">createUuid</a></li><li><a href="global.html#getStoreKey">getStoreKey</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#jumpToDiagnostic">jumpToDiagnostic</a></li><li><a href="global.html#onAssetUpload">onAssetUpload</a></li><li><a href="global.html#printCompileDiagnostics">printCompileDiagnostics</a></li><li><a href="global.html#remixSnapshot">remixSnapshot</a></li><li><a href="global.html#resetSnapshot">resetSnapshot</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#runActiveFile">runActiveFile</a></li><li><a href="global.html#sendConsoleLine">sendConsoleLine</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#appendConsoleLabel">appendConsoleLabel</a></li><li><a href="global.html#appendConsoleStyled">appendConsoleStyled</a></li><li><a href="global.html#appendDiagnosticLine">appendDiagnosticLine</a></li><li><a href="global.html#applyOutputFiles">applyOutputFiles</a></li><li><a href="global.html#applyResponsiveCardState">applyResponsiveCardState</a></li><li><a href="global.html#autoSizeConsoleInput">autoSizeConsoleInput</a></li><li><a href="global.html#bindUi">bindUi</a></li><li><a href="global.html#consoleInsert">consoleInsert</a></li><li><a href="global.html#createUuid">createUuid</a></li><li><a href="global.html#getStoreKey">getStoreKey</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#jumpToDiagnostic">jumpToDiagnostic</a></li><li><a href="global.html#onAssetUpload">onAssetUpload</a></li><li><a href="global.html#printCompileDiagnostics">printCompileDiagnostics</a></li><li><a href="global.html#remixSnapshot">remixSnapshot</a></li><li><a href="global.html#resetSnapshot">resetSnapshot</a></li><li><a href="global.html#router">router</a></li><li><a href="global.html#runActiveFile">runActiveFile</a></li><li><a href="global.html#sendConsoleLine">sendConsoleLine</a></li></ul>
 </nav>
 
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Jun 22 2026 15:01:17 GMT+0000 (Coordinated Universal Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon Jun 29 2026 23:59:38 GMT+0000 (Coordinated Universal Time)
 </footer>
 
 <script> prettyPrint(); </script>
