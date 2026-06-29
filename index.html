@@ -8,7 +8,7 @@
     content="default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'" />
   <title>МШПлюсПлюс.Онлайн — Web IDE C++</title>
   <link rel="icon" href="assets/shp-logo.webp" />
-  <link rel="stylesheet" href="assets/skulpt-styles.css" />
+  <link rel="stylesheet" href="assets/skulpt-styles.css?v=2" />
 </head>
 
 <body>
@@ -165,18 +165,8 @@
               aria-pressed="false">Консоль справа</button>
           </div>
         </div>
-        <pre id="console-output" class="console-output"></pre>
-        <div class="stdin-row">
-          <div class="stdin-label" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
-            Ввод · stdin
-          </div>
-          <textarea id="console-input" class="console-input stdin" rows="1"
-            placeholder="Программа запросит ввод — введите строку и нажмите Enter…"></textarea>
-          <div class="stdin-actions">
-            <span class="hint">Enter — отправить строку программе · Shift+Enter — перенос</span>
-          </div>
-        </div>
+        <pre id="console-output" class="console-output"><input id="console-input" class="console-input"
+            type="text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Ввод в консоль" /></pre>
       </section>
     </section>
     <nav id="mobile-nav" class="mobile-nav hidden" aria-label="Навигация IDE">
@@ -188,7 +178,7 @@
       title="Перезапустить IDE с очисткой кеша">Перезапуск IDE</button>
   </main>
 
-  <script type="module" src="assets/skulpt-app.js?v=14"></script>
+  <script type="module" src="assets/skulpt-app.js?v=15"></script>
 </body>
 
 </html>
