@@ -57,6 +57,8 @@
   --danger-weak: #fdeced;
   --green: #16a34a;
   --green-weak: #e9f7ef;
+  --amber: #b45309;
+  --amber-weak: #fdf2e3;
   --radius: 10px;
   --radius-sm: 7px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
@@ -94,6 +96,8 @@ body[data-theme="dark"] {
   --danger-weak: rgba(255, 107, 111, 0.14);
   --green: #36d07f;
   --green-weak: rgba(54, 208, 127, 0.15);
+  --amber: #ffb86c;
+  --amber-weak: rgba(255, 184, 108, 0.16);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.5);
 }
@@ -133,8 +137,8 @@ body[data-theme="dark"] .console-output {
   background: #160e36;
 }
 body[data-theme="dark"] .console-input {
-  background: var(--panel-2);
-  color: var(--text);
+  background: transparent;
+  color: inherit;
 }
 body[data-theme="dark"] .tab {
   background: var(--panel-2);
@@ -150,6 +154,17 @@ body[data-theme="dark"] .asset-item {
 }
 body[data-theme="dark"] .hero-code-title {
   color: var(--muted);
+}
+/* Тёмная тема: gutter CM6 и каретка/базовый цвет текста были захардкожены под свет
+   (gutter — светло-голубой → «белая колонка»; цвет/каретка — #000 → невидимы). */
+body[data-theme="dark"] .cm6-editor-host .cm-gutters {
+  background: var(--panel-2);
+}
+body[data-theme="dark"] .cm6-editor-host .cm-editor {
+  color: var(--text);
+}
+body[data-theme="dark"] .cm6-editor-host .cm-content {
+  caret-color: var(--text);
 }
 
 * {
@@ -525,6 +540,13 @@ body {
   min-height: 200px;
 }
 
+/* #6 — в режиме «консоль снизу» отдаём консоли не меньше ~30% вьюпорта
+   (раньше было фиксированных ~200px → слишком узко). */
+.workspace.no-turtle:not(.console-right) .console-pane {
+  height: clamp(220px, 34vh, 460px);
+  min-height: 220px;
+}
+
 .workspace.console-right {
   grid-template-columns: 240px minmax(0, 1fr) 320px 440px;
   grid-template-rows: 1fr;
@@ -720,8 +742,7 @@ body {
 }
 
 .editor-actions .run-status {
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
+  margin-left: 4px;
 }
 
 .tabs {
@@ -865,20 +886,23 @@ body {
   background: rgba(236, 243, 255, 0.95);
 }
 
+/* Инлайн-ввод прямо в потоке консоли (настоящий терминал): поле без рамки/фона,
+   моноширинный, цвета вывода; каретка приклеена к концу вывода программы. */
 .console-input {
-  flex: 1;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--text);
-  padding: 10px 12px;
+  display: inline;
   font-family: "JetBrains Mono", monospace;
-  font-size: 13px;
-}
-
-.console-input.awaiting-input {
-  border-color: rgba(28, 107, 255, 0.6);
-  box-shadow: 0 0 0 3px rgba(28, 107, 255, 0.25);
+  font-size: 12.5px;
+  line-height: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: 1ch;
+  min-width: 1ch;
+  caret-color: var(--accent);
+  vertical-align: baseline;
 }
 
 .turtle-pane {
@@ -1766,55 +1790,6 @@ body[data-theme="dark"] .lang-chip {
   color: #ff9ccb;
 }
 
-/* Блок ввода stdin — перенос из макета ide.html (.stdin-row) */
-.stdin-row {
-  border-top: 1px solid var(--border);
-  padding: 11px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--panel-2);
-}
-.stdin-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.stdin-label svg {
-  display: block;
-}
-.console-input.stdin {
-  flex: none;
-  width: 100%;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 9px 11px;
-  min-height: 48px;
-  resize: none;
-}
-.console-input.stdin:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-.stdin-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.hint {
-  font-size: 11px;
-  color: var(--faint);
-}
 
 /* Заголовки панелей — компактные uppercase (как в макете) */
 .panel-title {
@@ -1825,13 +1800,55 @@ body[data-theme="dark"] .lang-chip {
   font-weight: 600;
 }
 
-/* run-status — пилюля статуса */
+/* #2 — крупная плашка ЭТАПА запуска (компиляция/выполнение/готово/ошибка). */
 .run-status {
-  font-size: 11.5px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-3);
   color: var(--muted);
-  padding: 3px 9px;
-  border-radius: 20px;
+}
+.run-status::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.run-status[data-state="compiling"] {
+  color: var(--amber);
+  background: var(--amber-weak);
+  border-color: transparent;
+}
+.run-status[data-state="running"] {
+  color: var(--accent);
+  background: var(--accent-weak);
+  border-color: transparent;
+}
+.run-status[data-state="done"] {
+  color: var(--green);
+  background: var(--green-weak);
+  border-color: transparent;
+}
+.run-status[data-state="error"],
+.run-status[data-state="stopped"] {
+  color: var(--danger);
+  background: var(--danger-weak);
+  border-color: transparent;
+}
+.run-status[data-state="compiling"]::before,
+.run-status[data-state="running"]::before {
+  animation: run-pulse 1s infinite;
+}
+@keyframes run-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* ===== V-restyle 3: плоские full-bleed панели по макету ide.html ===== */
@@ -1877,18 +1894,40 @@ body[data-theme="dark"] .lang-chip {
   background: var(--panel);
 }
 
-/* ===== V-restyle 4: сегментированная консоль (перенос из макета ide.html) ===== */
+/* ===== Сегментированная консоль: метки КОМПИЛЯЦИЯ / ВЫВОД ПРОГРАММЫ =====
+   #2/#3 — крупнее и заметнее, с отступом сверху и горизонтальной чертой-разделителем. */
 .seg {
   margin-bottom: 11px;
 }
 .seg-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: var(--faint);
-  margin-bottom: 5px;
+  color: var(--muted);
+  margin: 14px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
   font-family: "Rubik", sans-serif;
+}
+.seg-label:first-child {
+  margin-top: 4px;
+  padding-top: 2px;
+  border-top: none;
+}
+.seg-label::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex: none;
+}
+.seg-label.ok::before {
+  background: var(--green);
 }
 .c-prompt {
   color: var(--accent);
