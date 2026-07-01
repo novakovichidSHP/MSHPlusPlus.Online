@@ -61,3 +61,65 @@ test("парсер не падает на null/undefined", () => {
 test("summarize: только ошибки (без предупреждений)", () => {
   assert.equal(summarizeDiagnostics(parseDiagnostics("main.cpp:1:1: error: e")), "Ошибок: 1");
 });
+
+test("нет main() → синтетическая ошибка в точке входа (аналог LNK2019)", () => {
+  const out = `wasm-ld: error: undefined symbol: main
+em++: error: linker command failed`;
+  const p = parseDiagnostics(out, { entry: "prog.cpp" });
+  assert.equal(p.counts.error, 1);
+  assert.equal(p.items[0].file, "prog.cpp");
+  assert.equal(p.items[0].line, 1);
+  assert.equal(p.items[0].severity, "error");
+  assert.match(p.items[0].message, /нет функции main/);
+  assert.equal(p.firstError.message, p.items[0].message);
+});
+
+test("нет main(): entry-форма и символ __main_argc_argv", () => {
+  assert.equal(
+    parseDiagnostics("wasm-ld: error: entry symbol not defined (pass --no-entry to suppress): main").counts.error,
+    1
+  );
+  assert.equal(
+    parseDiagnostics("wasm-ld: error: undefined symbol: __main_argc_argv").counts.error,
+    1
+  );
+});
+
+test("нет main() по умолчанию адресуется в main.cpp", () => {
+  const p = parseDiagnostics("wasm-ld: error: undefined symbol: main");
+  assert.equal(p.items[0].file, "main.cpp");
+});
+
+test("прочая ошибка компоновки даёт человекочитаемую сводку", () => {
+  const p = parseDiagnostics("wasm-ld: error: undefined symbol: foo");
+  assert.equal(p.counts.error, 0);
+  assert.equal(p.summary, "Ошибка компоновки: undefined symbol: foo");
+});
+
+test("диагностика служебных файлов тулчейна скрывается (internalFiles)", () => {
+  const out = `__cppio.cpp:5:6: warning: unused parameter 'x'
+main.cpp:2:2: error: expected ';'
+format.h:100:1: warning: shadow`;
+  const p = parseDiagnostics(out, { internalFiles: ["__cppio.cpp", "format.h"] });
+  assert.equal(p.items.length, 1);
+  assert.equal(p.items[0].file, "main.cpp");
+  assert.equal(p.counts.error, 1);
+  assert.equal(p.counts.warning, 0);
+});
+
+test("internalFiles работает и с срезкой префикса /working/", () => {
+  const out = `/working/__cppio.cpp:5:6: warning: w
+/working/main.cpp:1:1: warning: real`;
+  const p = parseDiagnostics(out, { internalFiles: ["__cppio.cpp"] });
+  assert.equal(p.counts.warning, 1);
+  assert.equal(p.items[0].file, "main.cpp");
+});
+
+test("реальная ошибка в исходнике важнее ошибки компоновки", () => {
+  // Если есть обычная ошибка компиляции — синтетику про main не добавляем.
+  const out = `main.cpp:3:1: error: expected ';'
+wasm-ld: error: undefined symbol: main`;
+  const p = parseDiagnostics(out);
+  assert.equal(p.counts.error, 1);
+  assert.equal(p.firstError.message, "expected ';'");
+});

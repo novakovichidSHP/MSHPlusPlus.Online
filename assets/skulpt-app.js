@@ -3378,7 +3378,10 @@ function printCompileDiagnostics(result) {
 
   // Сегмент «Компиляция» (как в макете): команда + результат.
   appendConsoleLabel("Компиляция");
-  appendConsoleStyled("$ clang++ -std=c++20 -O2 main.cpp", "c-prompt");
+  // Команда приходит из движка и отражает РЕАЛЬНЫЕ флаги (вкл. -Wall -Wextra) и
+  // исходники пользователя. Fallback — на случай старого формата результата.
+  const compileCmd = (result && result.command) || "clang++ -std=c++20 -O2 -Wall -Wextra main.cpp";
+  appendConsoleStyled(`$ ${compileCmd}`, "c-prompt");
 
   if (result && result.ok) {
     const warn = (diagnostics.counts && diagnostics.counts.warning) || 0;
