@@ -26,7 +26,11 @@ export const DEFAULTS = {
   workingDir: "/working",
   entry: "main.cpp",
   // Язык — C++20; библиотека — по факту тулчейна (см. ТЗ).
-  flags: ["-O2", "-std=c++20", "-fexceptions"],
+  // -Wall -Wextra: как в настоящем компиляторе (VS /W3+, g++/clang -Wall) —
+  // студент ДОЛЖЕН видеть подозрительный код (неинициализированные переменные,
+  // потерянный результат, `=` вместо `==` и т.п.), а не «зелёный» экран.
+  // Предупреждения не валят сборку (нет -Werror), но печатаются в консоль.
+  flags: ["-O2", "-std=c++20", "-fexceptions", "-Wall", "-Wextra"],
   // Технические флаги модуля (не показываются пользователю).
   // -sASYNCIFY — для интерактивного std::cin: программа приостанавливается на чтении,
   // пока пользователь не введёт данные (см. __cppio.cpp / inlib.js ниже).
@@ -36,6 +40,11 @@ export const DEFAULTS = {
     "-sEXPORT_NAME=createCppModule",
     "-sEXIT_RUNTIME=1",
     "-sASYNCIFY=1",
+    // Как в настоящем компиляторе (clang++/MSVC): программа без функции main()
+    // ДОЛЖНА падать на этапе компоновки. По умолчанию emscripten подставляет
+    // фиктивный main-заглушку (IGNORE_MISSING_MAIN=1) и «успешно» линкует пустой
+    // модуль — для учебной IDE это ложный сигнал. Выключаем: нет main → ошибка.
+    "-sIGNORE_MISSING_MAIN=0",
     // FS всегда присутствует — даже если программа не делает файлового I/O, мы
     // кладём в её MEMFS файлы-данные проекта (см. exec-worker preRun /work).
     // FS экспортируем: при -sMODULARIZE он внутри замыкания, снаружи (наш preRun)
@@ -55,6 +64,35 @@ export const DEFAULTS = {
 };
 
 const SOURCE_RE = /\.(cpp|cc|cxx|c\+\+|c)$/i;
+
+// Сканируем на использование C++20-фич И запрещённых вызовов не только .cpp,
+// но и заголовки проекта — иначе std::format, употреблённый в .h, детект бы
+// пропустил, и шим не подключился → ложная ошибка «no member format in std».
+const SCAN_RE = /\.(cpp|cc|cxx|c\+\+|c|h|hpp|hxx|hh|h\+\+|ipp|tcc|inl)$/i;
+
+// Вызовы, исполняющие ПРОИЗВОЛЬНЫЙ JavaScript из C++ (emscripten). В обычном C++
+// их нет; в браузерной песочнице они позволяют коду проекта выполнить любой JS
+// (fetch/эксфильтрация) в origin пользователя — опасно для импортированных/чужих
+// проектов. Блокируем на этапе компиляции. `\s*\(` — чтобы реагировать на вызов,
+// а не на упоминание в комментарии/строке (снижаем ложные срабатывания).
+const FORBIDDEN_JS_RE =
+  /\b(EM_ASM(?:_INT|_DOUBLE|_PTR|_ARGS)?|MAIN_THREAD_EM_ASM(?:_INT|_DOUBLE)?|emscripten_run_script(?:_int|_string)?|emscripten_async_run_script)\s*\(/;
+
+/**
+ * Ищет первый запрещённый JS-вызов в исходниках/заголовках проекта.
+ * @returns {{name:string,line:number,col:number,api:string}|null}
+ */
+function findForbiddenJs(files) {
+  for (const f of files || []) {
+    if (!f || !SCAN_RE.test(f.name)) continue;
+    const lines = String(f.content ?? "").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const m = FORBIDDEN_JS_RE.exec(lines[i]);
+      if (m) return { name: f.name, line: i + 1, col: m.index + 1, api: m[1] };
+    }
+  }
+  return null;
+}
 
 // --- Интерактивный ввод std::cin (Asyncify) ---
 // Доп. единица трансляции: подменяет буфер std::cin на async-streambuf ДО main
@@ -617,6 +655,28 @@ class CppRuntime {
     if (!this._emception) await this.init();
     this._validateFiles(files);
 
+    // Безопасность (см. FORBIDDEN_JS_RE): не даём коду проекта исполнять
+    // произвольный JS в браузере. Останавливаемся ДО запуска компилятора.
+    const forbidden = findForbiddenJs(files);
+    if (forbidden) {
+      const item = {
+        file: forbidden.name,
+        line: forbidden.line,
+        col: forbidden.col,
+        severity: "error",
+        message: `вызов ${forbidden.api} запрещён: он исполняет произвольный JavaScript в браузере. Уберите его из кода.`,
+        raw: forbidden.api
+      };
+      this._lastModuleJs = null;
+      return {
+        ok: false,
+        diagnostics: { items: [item], counts: { error: 1, warning: 0, note: 0 }, firstError: item, summary: null },
+        summary: item.message,
+        durationMs: 0,
+        command: null
+      };
+    }
+
     const flags = opts.flags || this.options.flags;
     const dir = this.options.workingDir;
     const sources = [];
@@ -629,6 +689,9 @@ class CppRuntime {
     if (sources.length === 0) {
       throw new CppRuntimeError("Нет ни одного .cpp файла для компиляции", "NO_SOURCES");
     }
+    // Имена только пользовательских исходников — для показа честной команды
+    // сборки (без служебной единицы __cppio.cpp и внутренних флагов тулчейна).
+    const userSources = sources.slice();
 
     // Доп. единица для интерактивного std::cin + js-library (см. moduleFlags).
     await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_SOURCE_NAME}`, CPPIO_SRC);
@@ -639,17 +702,17 @@ class CppRuntime {
     // подкладываем нужную прелюдию и force-include'им её. В обычных программах
     // ничего не добавляем (детект по исходникам).
     const extraFlags = [];
-    const usesFormat = files.some((f) => SOURCE_RE.test(f.name) && FMT_DETECT_RE.test(f.content));
+    const usesFormat = files.some((f) => SCAN_RE.test(f.name) && FMT_DETECT_RE.test(f.content));
     if (usesFormat) {
       await this._ensureFmtVendor(dir);
       extraFlags.push("-include", `${dir}/${FMT_SHIM_NAME}`);
     }
-    const usesRanges = files.some((f) => SOURCE_RE.test(f.name) && RANGES_DETECT_RE.test(f.content));
+    const usesRanges = files.some((f) => SCAN_RE.test(f.name) && RANGES_DETECT_RE.test(f.content));
     if (usesRanges) {
       await this._ensureRangesShim(dir);
       extraFlags.push("-include", `${dir}/${RANGES_SHIM_NAME}`);
     }
-    const usesViews = files.some((f) => SOURCE_RE.test(f.name) && VIEWS_DETECT_RE.test(f.content));
+    const usesViews = files.some((f) => SCAN_RE.test(f.name) && VIEWS_DETECT_RE.test(f.content));
     if (usesViews) {
       await this._ensureViewsShim(dir);
       extraFlags.push("-include", `${dir}/${VIEWS_SHIM_NAME}`);
@@ -682,7 +745,12 @@ class CppRuntime {
     const durationMs = _now() - t0;
 
     const diagnostics = parseDiagnostics(this._diagBuffer, {
-      stripPrefix: dir.endsWith("/") ? dir : dir + "/"
+      stripPrefix: dir.endsWith("/") ? dir : dir + "/",
+      entry: opts.entry || this.options.entry,
+      // Диагностику из служебных единиц тулчейна (наш __cppio.cpp, C++20-шимы,
+      // хедеры {fmt}) НЕ показываем студенту — это не его код. Под -Wall/-Wextra
+      // такие файлы могут давать свои предупреждения, засоряя консоль.
+      internalFiles: [CPPIO_SOURCE_NAME, FMT_SHIM_NAME, RANGES_SHIM_NAME, VIEWS_SHIM_NAME, ...FMT_HEADER_NAMES]
     });
     const ok = result && result.returncode === 0;
 
@@ -698,7 +766,11 @@ class CppRuntime {
       ok,
       diagnostics,
       summary: ok ? summarizeDiagnostics(diagnostics) : (diagnostics.firstError?.message || "Ошибка компиляции"),
-      durationMs
+      durationMs,
+      // Честная команда для консоли: реальные пользовательские флаги (вкл.
+      // -Wall -Wextra) + исходники пользователя, без служебной кухни тулчейна
+      // (em++, __cppio.cpp, module-флаги, -D-дефайны).
+      command: ["clang++", ...flags.filter((x) => !/^-D_LIBCPP/.test(x)), ...userSources].join(" ")
     };
   }
 

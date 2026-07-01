@@ -18,6 +18,18 @@
 const LINE_RE =
   /^(?<file>[^\s:][^:]*?):(?<line>\d+):(?<col>\d+):\s+(?<severity>error|warning|note|remark|fatal error):\s+(?<message>.*)$/;
 
+// Ошибки компоновки (wasm-ld / em++ / lld) не имеют формата file:line:col —
+// они не ложатся в LINE_RE. Ловим их отдельно, чтобы показать человеку внятный
+// текст вместо сырого «Ошибка компиляции».
+const LINK_ERR_RE =
+  /^(?:wasm-ld|em\+\+|emcc|ld(?:\.lld)?|clang(?:\+\+)?):\s*(?:fatal\s+)?error:\s*(.+)$/i;
+
+// Нет функции main() — точки входа. Аналог MSVC LNK2019 / clang «undefined
+// symbol: main». emscripten в строгом режиме (IGNORE_MISSING_MAIN=0) даёт один
+// из этих текстов. Символ может быть main или __main_argc_argv.
+const MISSING_MAIN_RE =
+  /undefined symbol:\s*_*main(?:_argc_argv)?\b|entry symbol not defined[^\n]*\bmain\b/i;
+
 const SEVERITY_RANK = { "fatal error": 4, error: 3, warning: 2, note: 1, remark: 0 };
 
 /**
@@ -25,6 +37,10 @@ const SEVERITY_RANK = { "fatal error": 4, error: 3, warning: 2, note: 1, remark:
  * @param {object} [opts]
  * @param {string} [opts.stripPrefix="/working/"] — префикс пути, который
  *        срезаем у имён файлов, чтобы получить имя как в редакторе (main.cpp).
+ * @param {string} [opts.entry="main.cpp"] — имя точки входа; на него ссылается
+ *        синтетическая диагностика «нет main()».
+ * @param {string[]|Set<string>} [opts.internalFiles] — служебные файлы тулчейна
+ *        (после срезки префикса), диагностику которых НЕ показываем пользователю.
  * @returns {{
  *   items: Array<{file:string, line:number, col:number, severity:string, message:string, raw:string}>,
  *   counts: {error:number, warning:number, note:number},
@@ -34,9 +50,13 @@ const SEVERITY_RANK = { "fatal error": 4, error: 3, warning: 2, note: 1, remark:
  */
 export function parseDiagnostics(text, opts = {}) {
   const stripPrefix = opts.stripPrefix ?? "/working/";
+  const internalFiles =
+    opts.internalFiles instanceof Set ? opts.internalFiles : new Set(opts.internalFiles || []);
   const items = [];
   const counts = { error: 0, warning: 0, note: 0 };
   let summary = null;
+
+  const linkerErrors = [];
 
   const lines = String(text ?? "").split(/\r?\n/);
   for (const raw of lines) {
@@ -49,6 +69,8 @@ export function parseDiagnostics(text, opts = {}) {
       if (stripPrefix && file.startsWith(stripPrefix)) {
         file = file.slice(stripPrefix.length);
       }
+      // Диагностику служебных файлов тулчейна не показываем как код студента.
+      if (internalFiles.has(file)) continue;
       const severity = m.groups.severity === "fatal error" ? "error" : m.groups.severity;
       const item = {
         file,
@@ -68,6 +90,33 @@ export function parseDiagnostics(text, opts = {}) {
     // «N errors generated.» / «1 warning generated.»
     if (/\b\d+\s+(error|warning)s?\s+generated\./.test(line)) {
       summary = line;
+      continue;
+    }
+
+    const lk = LINK_ERR_RE.exec(line);
+    if (lk) linkerErrors.push(lk[1].trim());
+  }
+
+  // Пост-обработка ошибок компоновки. Только если нет обычных ошибок компиляции
+  // (иначе первопричина — в исходнике, её и показываем).
+  if (counts.error === 0) {
+    const fullText = String(text ?? "");
+    if (MISSING_MAIN_RE.test(fullText)) {
+      // Синтетическая диагностика уровня «нет точки входа» — как ошибка в main.cpp:1,
+      // чтобы строка была кликабельной и вела в файл, где нужно завести main().
+      const entry = opts.entry || "main.cpp";
+      items.unshift({
+        file: entry,
+        line: 1,
+        col: 1,
+        severity: "error",
+        message: "в программе нет функции main() — точки входа. Добавьте: int main() { … }",
+        raw: "undefined symbol: main"
+      });
+      counts.error += 1;
+    } else if (linkerErrors.length) {
+      // Прочие ошибки компоновки — показываем первую человеку.
+      summary = "Ошибка компоновки: " + linkerErrors[0];
     }
   }
 
