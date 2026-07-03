@@ -197,6 +197,7 @@ const els = {
   debugStepOverBtn: document.getElementById("debug-step-over-btn"),
   debugStepIntoBtn: document.getElementById("debug-step-into-btn"),
   debugStepOutBtn: document.getElementById("debug-step-out-btn"),
+  debugStatus: document.getElementById("debug-status"),
   debugFrame: document.getElementById("debug-frame"),
   debugBreakpoints: document.getElementById("debug-breakpoints"),
   debugVariables: document.getElementById("debug-variables"),
@@ -1515,12 +1516,20 @@ function toggleBreakpointAtLine(lineNumber) {
 }
 
 function renderDebugPanel() {
+  const runStatus = String(els.runStatus?.dataset?.state || "");
+  const debugState = state.debugActive
+    ? (state.debugPaused ? "paused" : "running")
+    : (runStatus === "debugdone" ? "done" : "idle");
   if (els.debugPanel) {
     els.debugPanel.classList.toggle("hidden", state.mode !== "project" && state.mode !== "snapshot");
+    els.debugPanel.dataset.debugState = debugState;
+  }
+  if (els.debugStatus) {
+    els.debugStatus.textContent = debugState;
   }
   if (els.debugFrame) {
     const frame = state.debugFrame;
-    els.debugFrame.textContent = frame ? `${frame.file}:${frame.line} (${frame.functionName || "?"})` : "нет";
+    els.debugFrame.textContent = frame ? `${frame.file}:${frame.line} (${frame.functionName || "?"})` : "нет активного кадра";
   }
   if (els.debugBreakpoints) {
     if (!state.debugBreakpoints.length) {
@@ -1528,13 +1537,13 @@ function renderDebugPanel() {
     } else {
       els.debugBreakpoints.innerHTML = state.debugBreakpoints
         .map((bp) => `<span class="debug-breakpoint-chip">${escapeHtml(bp)}</span>`)
-        .join(", ");
+        .join("");
     }
   }
   const variables = Array.isArray(state.debugFrame?.variables) ? state.debugFrame.variables : [];
   if (els.debugVariables) {
     els.debugVariables.innerHTML = variables.length
-      ? variables.map((item) => `${escapeHtml(item.name)}=${escapeHtml(item.value)}`).join(", ")
+      ? variables.map((item) => `<span class="debug-value-chip"><strong>${escapeHtml(item.name)}</strong>${escapeHtml(item.value)}</span>`).join("")
       : "нет";
   }
   if (els.debugWatchInput && els.debugWatchInput.value !== state.debugWatch) {
@@ -1547,7 +1556,7 @@ function renderDebugPanel() {
       .filter(Boolean);
     const byName = new Map(variables.map((item) => [item.name, item.value]));
     els.debugWatchValues.innerHTML = names.length
-      ? names.map((name) => `${escapeHtml(name)}=${escapeHtml(byName.has(name) ? byName.get(name) : "н/д")}`).join(", ")
+      ? names.map((name) => `<span class="debug-value-chip"><strong>${escapeHtml(name)}</strong>${escapeHtml(byName.has(name) ? byName.get(name) : "н/д")}</span>`).join("")
       : "нет";
   }
   const paused = Boolean(state.debugActive && state.debugPaused);

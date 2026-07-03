@@ -157,19 +157,45 @@
           </div>
         </div>
         <div id="debug-panel" class="debug-panel" aria-label="Отладчик">
-          <div class="debug-controls">
-            <button id="debug-breakpoint-btn" class="btn small">Брейкпоинт</button>
-            <button id="debug-continue-btn" class="btn small primary" disabled>Continue</button>
-            <button id="debug-step-over-btn" class="btn small" disabled>Step over</button>
-            <button id="debug-step-into-btn" class="btn small" disabled>Step into</button>
-            <button id="debug-step-out-btn" class="btn small" disabled>Step out</button>
+          <div class="debug-section debug-section-controls">
+            <div class="debug-section-head">
+              <span class="debug-section-title">Controls</span>
+              <span id="debug-status" class="debug-status">idle</span>
+            </div>
+            <div class="debug-controls">
+              <button id="debug-breakpoint-btn" class="btn small">Брейкпоинт</button>
+              <button id="debug-continue-btn" class="btn small primary" disabled>Continue</button>
+              <button id="debug-step-over-btn" class="btn small" disabled>Step over</button>
+              <button id="debug-step-into-btn" class="btn small" disabled>Step into</button>
+              <button id="debug-step-out-btn" class="btn small" disabled>Step out</button>
+            </div>
           </div>
-          <div class="debug-info">
-            <div><strong>Точка:</strong> <span id="debug-frame">нет</span></div>
-            <div><strong>Breakpoints:</strong> <span id="debug-breakpoints">нет</span></div>
-            <div><strong>Variables:</strong> <span id="debug-variables">нет</span></div>
-            <label class="debug-watch-row"><strong>Watch:</strong><input id="debug-watch-input" class="debug-watch-input" type="text" placeholder="a, total, name" /></label>
-            <div><strong>Watch values:</strong> <span id="debug-watch-values">нет</span></div>
+          <div class="debug-section">
+            <div class="debug-section-head">
+              <span class="debug-section-title">Call stack</span>
+            </div>
+            <div class="debug-info-row"><span id="debug-frame">нет</span></div>
+          </div>
+          <div class="debug-section">
+            <div class="debug-section-head">
+              <span class="debug-section-title">Variables</span>
+            </div>
+            <div id="debug-variables" class="debug-value-list">нет</div>
+          </div>
+          <div class="debug-section">
+            <div class="debug-section-head">
+              <span class="debug-section-title">Watch</span>
+            </div>
+            <label class="debug-watch-row">
+              <input id="debug-watch-input" class="debug-watch-input" type="text" placeholder="a, total, name" />
+            </label>
+            <div id="debug-watch-values" class="debug-value-list">нет</div>
+          </div>
+          <div class="debug-section">
+            <div class="debug-section-head">
+              <span class="debug-section-title">Breakpoints</span>
+            </div>
+            <div id="debug-breakpoints" class="debug-value-list">нет</div>
           </div>
         </div>
       </section>
