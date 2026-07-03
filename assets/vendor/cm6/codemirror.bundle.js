@@ -2606,7 +2606,7 @@ EditorState.changeFilter = changeFilter;
 EditorState.transactionFilter = transactionFilter;
 EditorState.transactionExtender = transactionExtender;
 Compartment.reconfigure = /* @__PURE__ */ StateEffect.define();
-function combineConfig(configs, defaults, combine = {}) {
+function combineConfig(configs, defaults2, combine = {}) {
   let result = {};
   for (let config of configs)
     for (let key of Object.keys(config)) {
@@ -2619,9 +2619,9 @@ function combineConfig(configs, defaults, combine = {}) {
       else
         throw new Error("Config merge conflict for field " + key);
     }
-  for (let key in defaults)
+  for (let key in defaults2)
     if (result[key] === void 0)
-      result[key] = defaults[key];
+      result[key] = defaults2[key];
   return result;
 }
 var RangeValue = class {
@@ -12972,7 +12972,23 @@ GutterMarker.prototype.startSide = GutterMarker.prototype.endSide = -1;
 GutterMarker.prototype.point = true;
 var gutterLineClass = /* @__PURE__ */ Facet.define();
 var gutterWidgetClass = /* @__PURE__ */ Facet.define();
+var defaults = {
+  class: "",
+  renderEmptyElements: false,
+  elementStyle: "",
+  markers: () => RangeSet.empty,
+  lineMarker: () => null,
+  widgetMarker: () => null,
+  lineMarkerChange: null,
+  initialSpacer: null,
+  updateSpacer: null,
+  domEventHandlers: {},
+  side: "before"
+};
 var activeGutters = /* @__PURE__ */ Facet.define();
+function gutter(config) {
+  return [gutters(), activeGutters.of({ ...defaults, ...config })];
+}
 var unfixGutters = /* @__PURE__ */ Facet.define({
   combine: (values) => values.some((x) => x)
 });
@@ -20939,6 +20955,16 @@ function cpp() {
 // assets/vendor/cm6/codemirror.entry.js
 var DEFAULT_TAB_SIZE = 4;
 var DEFAULT_FONT_SIZE = 14;
+var DebugBreakpointMarker = class extends GutterMarker {
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "cm-debug-breakpoint-dot";
+    marker.textContent = "\u25CF";
+    marker.title = "Breakpoint";
+    return marker;
+  }
+};
+var debugBreakpointMarker = new DebugBreakpointMarker();
 var legacyHighlightStyle = HighlightStyle.define([
   {
     tag: [
@@ -21049,7 +21075,8 @@ function createCodeMirrorEditor({
   onDocChange,
   onSelectionChange,
   onScroll,
-  onShortcutKeydown
+  onShortcutKeydown,
+  onDebugGutterClick
 }) {
   if (!parent) {
     throw new Error("createCodeMirrorEditor: parent is required");
@@ -21060,13 +21087,59 @@ function createCodeMirrorEditor({
   const editableCompartment = new Compartment();
   const languageCompartment = new Compartment();
   const themeCompartment = new Compartment();
+  const debugCompartment = new Compartment();
   const settingsState = normalizeSettings(settings);
+  let debugMarkers = { breakpoints: [], currentLine: null };
   const getWrapExtension = (enabled) => enabled ? EditorView.lineWrapping : [];
   const getTabExtension = (value) => EditorState.tabSize.of(value);
   const getReadOnlyExtension = (value) => EditorState.readOnly.of(value);
   const getEditableExtension = (value) => EditorView.editable.of(!value);
+  const buildDebugExtension = () => {
+    const breakpointLines = new Set(
+      (debugMarkers.breakpoints || []).map((line) => Math.floor(Number(line))).filter((line) => line > 0)
+    );
+    const currentLine = Math.floor(Number(debugMarkers.currentLine) || 0);
+    const lineDecorations = [];
+    for (const { from, number: number2 } of viewLineIter()) {
+      const classes = [];
+      if (breakpointLines.has(number2)) classes.push("cm-debug-breakpoint-line");
+      if (number2 === currentLine) classes.push("cm-debug-current-line");
+      if (classes.length) {
+        lineDecorations.push(Decoration.line({ class: classes.join(" ") }).range(from));
+      }
+    }
+    return [
+      EditorView.decorations.of(Decoration.set(lineDecorations, true)),
+      gutter({
+        class: "cm-debug-gutter",
+        lineMarker(view2, line) {
+          const number2 = view2.state.doc.lineAt(line.from).number;
+          return breakpointLines.has(number2) ? debugBreakpointMarker : null;
+        },
+        initialSpacer: () => debugBreakpointMarker,
+        domEventHandlers: {
+          mousedown(view2, line, event) {
+            if (typeof onDebugGutterClick !== "function") return false;
+            event.preventDefault();
+            const number2 = view2.state.doc.lineAt(line.from).number;
+            onDebugGutterClick(number2);
+            return true;
+          }
+        }
+      })
+    ];
+  };
+  function* viewLineIter() {
+    if (!viewRef) return;
+    const doc2 = viewRef.state.doc;
+    for (let i = 1; i <= doc2.lines; i += 1) {
+      const line = doc2.line(i);
+      yield { from: line.from, number: i };
+    }
+  }
   let destroyed = false;
   let suppressDocEvent = false;
+  let viewRef = null;
   const domEvents = EditorView.domEventHandlers({
     keydown(event, view2) {
       if (typeof onShortcutKeydown !== "function") {
@@ -21106,6 +21179,7 @@ function createCodeMirrorEditor({
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
+    debugCompartment.of([]),
     themeCompartment.of(getThemeExtension(settingsState.theme)),
     languageCompartment.of(cpp()),
     tabSizeCompartment.of(getTabExtension(settingsState.tabSize)),
@@ -21129,6 +21203,7 @@ function createCodeMirrorEditor({
     state,
     parent
   });
+  viewRef = view;
   const syncRootMetrics = () => {
     view.dom.style.setProperty("--editor-font-size", `${settingsState.fontSize}px`);
   };
@@ -21194,6 +21269,15 @@ function createCodeMirrorEditor({
       effects: themeCompartment.reconfigure(getThemeExtension(settingsState.theme))
     });
   };
+  const setDebugMarkers = (markers = {}) => {
+    debugMarkers = {
+      breakpoints: Array.isArray(markers.breakpoints) ? markers.breakpoints : [],
+      currentLine: markers.currentLine || null
+    };
+    view.dispatch({
+      effects: debugCompartment.reconfigure(buildDebugExtension())
+    });
+  };
   syncRootMetrics();
   return {
     kind: "cm6",
@@ -21209,6 +21293,7 @@ function createCodeMirrorEditor({
     setReadOnly,
     applySettings,
     setTheme,
+    setDebugMarkers,
     destroy() {
       if (destroyed) {
         return;

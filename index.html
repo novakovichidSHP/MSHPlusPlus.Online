@@ -131,6 +131,7 @@
         <div class="editor-toolbar">
           <div class="editor-actions">
             <button id="run-btn" class="btn primary" title="Запуск (F8 или Alt+R)"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg>Запуск main.cpp</button>
+            <button id="debug-btn" class="btn" title="Отладка main.cpp"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="5" y="6" width="14" height="14" rx="3"/><path d="M9 10h6"/><path d="M9 14h6"/></svg>Отладка</button>
             <button id="stop-btn" class="btn danger" disabled title="Остановить (Alt+X)"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Стоп</button>
             <div id="run-status" class="run-status">Ожидание</div>
           </div>
@@ -152,6 +153,22 @@
           <div class="editor-stack">
             <pre id="editor-highlight" class="editor-highlight" aria-hidden="true"></pre>
             <textarea id="editor" class="editor" spellcheck="false"></textarea>
+          </div>
+        </div>
+        <div id="debug-panel" class="debug-panel" aria-label="Отладчик">
+          <div class="debug-controls">
+            <button id="debug-breakpoint-btn" class="btn small">Брейкпоинт</button>
+            <button id="debug-continue-btn" class="btn small primary" disabled>Continue</button>
+            <button id="debug-step-over-btn" class="btn small" disabled>Step over</button>
+            <button id="debug-step-into-btn" class="btn small" disabled>Step into</button>
+            <button id="debug-step-out-btn" class="btn small" disabled>Step out</button>
+          </div>
+          <div class="debug-info">
+            <div><strong>Точка:</strong> <span id="debug-frame">нет</span></div>
+            <div><strong>Breakpoints:</strong> <span id="debug-breakpoints">нет</span></div>
+            <div><strong>Variables:</strong> <span id="debug-variables">нет</span></div>
+            <label class="debug-watch-row"><strong>Watch:</strong><input id="debug-watch-input" class="debug-watch-input" type="text" placeholder="a, total, name" /></label>
+            <div><strong>Watch values:</strong> <span id="debug-watch-values">нет</span></div>
           </div>
         </div>
       </section>
@@ -178,7 +195,7 @@
       title="Перезапустить IDE с очисткой кеша">Перезапуск IDE</button>
   </main>
 
-  <script type="module" src="assets/skulpt-app.js?v=15"></script>
+  <script type="module" src="assets/skulpt-app.js?v=16"></script>
 </body>
 
 </html>

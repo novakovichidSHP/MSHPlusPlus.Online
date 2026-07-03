@@ -1,9 +1,12 @@
 import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
 import {
+  Decoration,
   EditorView,
+  GutterMarker,
   crosshairCursor,
   drawSelection,
   dropCursor,
+  gutter,
   highlightActiveLine,
   highlightSpecialChars,
   keymap,
@@ -23,6 +26,18 @@ import { tags } from "@lezer/highlight";
 
 const DEFAULT_TAB_SIZE = 4;
 const DEFAULT_FONT_SIZE = 14;
+
+class DebugBreakpointMarker extends GutterMarker {
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "cm-debug-breakpoint-dot";
+    marker.textContent = "●";
+    marker.title = "Breakpoint";
+    return marker;
+  }
+}
+
+const debugBreakpointMarker = new DebugBreakpointMarker();
 
 const legacyHighlightStyle = HighlightStyle.define([
   {
@@ -143,7 +158,8 @@ export function createCodeMirrorEditor({
   onDocChange,
   onSelectionChange,
   onScroll,
-  onShortcutKeydown
+  onShortcutKeydown,
+  onDebugGutterClick
 }) {
   if (!parent) {
     throw new Error("createCodeMirrorEditor: parent is required");
@@ -155,15 +171,65 @@ export function createCodeMirrorEditor({
   const editableCompartment = new Compartment();
   const languageCompartment = new Compartment();
   const themeCompartment = new Compartment();
+  const debugCompartment = new Compartment();
   const settingsState = normalizeSettings(settings);
+  let debugMarkers = { breakpoints: [], currentLine: null };
 
   const getWrapExtension = (enabled) => (enabled ? EditorView.lineWrapping : []);
   const getTabExtension = (value) => EditorState.tabSize.of(value);
   const getReadOnlyExtension = (value) => EditorState.readOnly.of(value);
   const getEditableExtension = (value) => EditorView.editable.of(!value);
 
+  const buildDebugExtension = () => {
+    const breakpointLines = new Set(
+      (debugMarkers.breakpoints || [])
+        .map((line) => Math.floor(Number(line)))
+        .filter((line) => line > 0)
+    );
+    const currentLine = Math.floor(Number(debugMarkers.currentLine) || 0);
+    const lineDecorations = [];
+    for (const { from, number } of viewLineIter()) {
+      const classes = [];
+      if (breakpointLines.has(number)) classes.push("cm-debug-breakpoint-line");
+      if (number === currentLine) classes.push("cm-debug-current-line");
+      if (classes.length) {
+        lineDecorations.push(Decoration.line({ class: classes.join(" ") }).range(from));
+      }
+    }
+    return [
+      EditorView.decorations.of(Decoration.set(lineDecorations, true)),
+      gutter({
+        class: "cm-debug-gutter",
+        lineMarker(view, line) {
+          const number = view.state.doc.lineAt(line.from).number;
+          return breakpointLines.has(number) ? debugBreakpointMarker : null;
+        },
+        initialSpacer: () => debugBreakpointMarker,
+        domEventHandlers: {
+          mousedown(view, line, event) {
+            if (typeof onDebugGutterClick !== "function") return false;
+            event.preventDefault();
+            const number = view.state.doc.lineAt(line.from).number;
+            onDebugGutterClick(number);
+            return true;
+          }
+        }
+      })
+    ];
+  };
+
+  function* viewLineIter() {
+    if (!viewRef) return;
+    const doc = viewRef.state.doc;
+    for (let i = 1; i <= doc.lines; i += 1) {
+      const line = doc.line(i);
+      yield { from: line.from, number: i };
+    }
+  }
+
   let destroyed = false;
   let suppressDocEvent = false;
+  let viewRef = null;
 
   const domEvents = EditorView.domEventHandlers({
     keydown(event, view) {
@@ -206,6 +272,7 @@ export function createCodeMirrorEditor({
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
+    debugCompartment.of([]),
     themeCompartment.of(getThemeExtension(settingsState.theme)),
     languageCompartment.of(cpp()),
     tabSizeCompartment.of(getTabExtension(settingsState.tabSize)),
@@ -231,6 +298,7 @@ export function createCodeMirrorEditor({
     state,
     parent
   });
+  viewRef = view;
 
   const syncRootMetrics = () => {
     view.dom.style.setProperty("--editor-font-size", `${settingsState.fontSize}px`);
@@ -307,6 +375,16 @@ export function createCodeMirrorEditor({
     });
   };
 
+  const setDebugMarkers = (markers = {}) => {
+    debugMarkers = {
+      breakpoints: Array.isArray(markers.breakpoints) ? markers.breakpoints : [],
+      currentLine: markers.currentLine || null
+    };
+    view.dispatch({
+      effects: debugCompartment.reconfigure(buildDebugExtension())
+    });
+  };
+
   syncRootMetrics();
 
   return {
@@ -323,6 +401,7 @@ export function createCodeMirrorEditor({
     setReadOnly,
     applySettings,
     setTheme,
+    setDebugMarkers,
     destroy() {
       if (destroyed) {
         return;

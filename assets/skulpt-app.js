@@ -4,8 +4,9 @@ import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { dictEncode, dictDecode } from "./utils/share-dict.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
-import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=9";
+import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=10";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
+import { createDebugKey } from "./cpp-runtime/debug-instrumentation.js";
 
 // Движок C++ (emception) — занимает место Skulpt. Инициализируется в initRuntime().
 // baseUrl относителен расположению cpp-runtime.js (assets/cpp-runtime/) → ../../toolchain/
@@ -43,9 +44,19 @@ const VALID_FILENAME = /^[A-Za-z0-9._\-\u0400-\u04FF]+$/;
 // \u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u043E\u0432 C++ (\u0435\u0434\u0438\u043D\u0438\u0446\u044B \u0442\u0440\u0430\u043D\u0441\u043B\u044F\u0446\u0438\u0438 + \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438). \u0418\u043C\u044F \u0431\u0435\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u2192 .cpp.
 const SOURCE_EXTENSIONS = [".cpp", ".cc", ".cxx", ".c", ".hpp", ".hh", ".hxx", ".h"];
 const DEFAULT_SOURCE_EXTENSION = ".cpp";
+const GENERATED_RUNTIME_ARTIFACTS = new Set([
+  "__debug_runtime.cpp",
+  "__debug_runtime_lib.js"
+]);
 function hasSourceExtension(name) {
   const lower = String(name || "").toLowerCase();
   return SOURCE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+function isGeneratedRuntimeArtifactName(name) {
+  return GENERATED_RUNTIME_ARTIFACTS.has(getBaseName(String(name || "")).toLowerCase());
+}
+function getPortableProjectFiles(files) {
+  return (files || []).filter((file) => !isGeneratedRuntimeArtifactName(file?.name));
 }
 const encoder = typeof TextEncoder !== "undefined"
   ? new TextEncoder()
@@ -98,7 +109,12 @@ const RUN_STATUS_LABELS = {
   running: "Выполняется",
   done: "Готово",
   error: "Ошибка",
-  stopped: "Остановлено"
+  stopped: "Остановлено",
+  debugcompiling: "Отладка: компиляция…",
+  debugrunning: "Отладка: выполняется",
+  debugpaused: "Отладка: пауза",
+  debugdone: "Отладка: готово",
+  debugerror: "Отладка: ошибка"
 };
 const IMAGE_ASSET_EXTENSIONS = new Set([
   ".png",
@@ -131,6 +147,11 @@ const state = {
   stdinQueue: [],
   stdinWaiting: false,
   runTimeout: null,
+  debugActive: false,
+  debugPaused: false,
+  debugBreakpoints: [],
+  debugFrame: null,
+  debugWatch: "",
   outputBytes: 0,
   saveTimer: null,
   draftTimer: null,
@@ -167,7 +188,19 @@ const els = {
   restartIdeButtons: document.querySelectorAll("[data-action=\"restart-ide\"]"),
   restartInline: document.getElementById("restart-ide-inline"),
   runBtn: document.getElementById("run-btn"),
+  debugBtn: document.getElementById("debug-btn"),
   stopBtn: document.getElementById("stop-btn"),
+  debugPanel: document.getElementById("debug-panel"),
+  debugBreakpointBtn: document.getElementById("debug-breakpoint-btn"),
+  debugContinueBtn: document.getElementById("debug-continue-btn"),
+  debugStepOverBtn: document.getElementById("debug-step-over-btn"),
+  debugStepIntoBtn: document.getElementById("debug-step-into-btn"),
+  debugStepOutBtn: document.getElementById("debug-step-out-btn"),
+  debugFrame: document.getElementById("debug-frame"),
+  debugBreakpoints: document.getElementById("debug-breakpoints"),
+  debugVariables: document.getElementById("debug-variables"),
+  debugWatchInput: document.getElementById("debug-watch-input"),
+  debugWatchValues: document.getElementById("debug-watch-values"),
   clearBtn: document.getElementById("clear-btn"),
   themeToggle: document.getElementById("theme-toggle"),
   shareBtn: document.getElementById("share-btn"),
@@ -409,7 +442,8 @@ function initEditorAdapter({ preserve = false } = {}) {
     editorStack: els.editorStack,
     editorWrap: els.editorWrap,
     editorHighlight: els.editorHighlight,
-    lineNumbers: els.lineNumbers
+    lineNumbers: els.lineNumbers,
+    onDebugGutterClick: (lineNumber) => toggleBreakpointAtLine(lineNumber)
   });
   state.editorAdapter.init({
     initialValue: preservedValue,
@@ -419,6 +453,7 @@ function initEditorAdapter({ preserve = false } = {}) {
   state.editorAdapter.setSelection(preservedSelection);
   state.editorAdapter.setScroll(preservedScroll);
   callEditorAdapterMethod("setTheme", currentTheme());
+  syncDebugEditorMarkers();
 }
 
 init();
@@ -474,7 +509,31 @@ function bindUi() {
   }
 
   els.runBtn.addEventListener("click", runActiveFile);
+  if (els.debugBtn) {
+    els.debugBtn.addEventListener("click", debugActiveFile);
+  }
   els.stopBtn.addEventListener("click", stopRun);
+  if (els.debugBreakpointBtn) {
+    els.debugBreakpointBtn.addEventListener("click", toggleBreakpointAtCursor);
+  }
+  if (els.debugContinueBtn) {
+    els.debugContinueBtn.addEventListener("click", () => resumeDebug("continue"));
+  }
+  if (els.debugStepOverBtn) {
+    els.debugStepOverBtn.addEventListener("click", () => resumeDebug("stepOver"));
+  }
+  if (els.debugStepIntoBtn) {
+    els.debugStepIntoBtn.addEventListener("click", () => resumeDebug("stepInto"));
+  }
+  if (els.debugStepOutBtn) {
+    els.debugStepOutBtn.addEventListener("click", () => resumeDebug("stepOut"));
+  }
+  if (els.debugWatchInput) {
+    els.debugWatchInput.addEventListener("input", () => {
+      state.debugWatch = els.debugWatchInput.value || "";
+      renderDebugPanel();
+    });
+  }
   els.clearBtn.addEventListener("click", clearConsole);
   if (els.themeToggle) {
     els.themeToggle.addEventListener("click", toggleTheme);
@@ -1247,6 +1306,7 @@ function renderProject() {
   if (state.embed.active && state.embed.autorun) {
     setTimeout(() => runActiveFile(), 200);
   }
+  renderDebugPanel();
   applyResponsiveCardState();
 }
 
@@ -1262,6 +1322,7 @@ function renderSnapshot() {
   if (state.embed.active && state.embed.autorun) {
     setTimeout(() => runActiveFile(), 200);
   }
+  renderDebugPanel();
   applyResponsiveCardState();
 }
 
@@ -1339,6 +1400,7 @@ function setActiveFile(name) {
   renderFiles(getCurrentFiles());
   updateTabs();
   updateEditorContent();
+  renderDebugPanel();
 }
 
 function updateFileActionState() {
@@ -1417,6 +1479,128 @@ function updateLineHighlightPosition() {
 
 function refreshEditorDecorations() {
   callEditorAdapterMethod("refreshDecorations");
+}
+
+function getEditorCursorLine() {
+  const selection = getEditorSelection();
+  const value = getEditorValue();
+  const offset = Math.max(0, Math.min(value.length, Number(selection?.start || 0)));
+  return value.slice(0, offset).split("\n").length;
+}
+
+function toggleBreakpointAtCursor() {
+  if (!state.activeFile) return;
+  const line = getEditorCursorLine();
+  toggleBreakpointAtLine(line);
+}
+
+function toggleBreakpointAtLine(lineNumber) {
+  if (!state.activeFile) return;
+  if (state.debugActive) {
+    showToast("Breakpoints меняются перед запуском отладки.");
+    return;
+  }
+  const line = Math.max(1, Math.floor(Number(lineNumber) || 1));
+  const key = createDebugKey(state.activeFile, line);
+  if (state.debugBreakpoints.includes(key)) {
+    state.debugBreakpoints = state.debugBreakpoints.filter((item) => item !== key);
+  } else {
+    state.debugBreakpoints = [...state.debugBreakpoints, key].sort();
+  }
+  renderDebugPanel();
+}
+
+function renderDebugPanel() {
+  if (els.debugPanel) {
+    els.debugPanel.classList.toggle("hidden", state.mode !== "project" && state.mode !== "snapshot");
+  }
+  if (els.debugFrame) {
+    const frame = state.debugFrame;
+    els.debugFrame.textContent = frame ? `${frame.file}:${frame.line} (${frame.functionName || "?"})` : "нет";
+  }
+  if (els.debugBreakpoints) {
+    if (!state.debugBreakpoints.length) {
+      els.debugBreakpoints.textContent = "нет";
+    } else {
+      els.debugBreakpoints.innerHTML = state.debugBreakpoints
+        .map((bp) => `<span class="debug-breakpoint-chip">${escapeHtml(bp)}</span>`)
+        .join(", ");
+    }
+  }
+  const variables = Array.isArray(state.debugFrame?.variables) ? state.debugFrame.variables : [];
+  if (els.debugVariables) {
+    els.debugVariables.innerHTML = variables.length
+      ? variables.map((item) => `${escapeHtml(item.name)}=${escapeHtml(item.value)}`).join(", ")
+      : "нет";
+  }
+  if (els.debugWatchInput && els.debugWatchInput.value !== state.debugWatch) {
+    els.debugWatchInput.value = state.debugWatch;
+  }
+  if (els.debugWatchValues) {
+    const names = String(state.debugWatch || "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const byName = new Map(variables.map((item) => [item.name, item.value]));
+    els.debugWatchValues.innerHTML = names.length
+      ? names.map((name) => `${escapeHtml(name)}=${escapeHtml(byName.has(name) ? byName.get(name) : "н/д")}`).join(", ")
+      : "нет";
+  }
+  const paused = Boolean(state.debugActive && state.debugPaused);
+  for (const button of [els.debugContinueBtn, els.debugStepOverBtn, els.debugStepIntoBtn, els.debugStepOutBtn]) {
+    if (button) button.disabled = !paused;
+  }
+  if (els.debugBreakpointBtn) {
+    els.debugBreakpointBtn.disabled = Boolean(state.debugActive);
+  }
+  syncDebugEditorMarkers();
+}
+
+function syncDebugEditorMarkers() {
+  const breakpoints = state.debugBreakpoints
+    .map((bp) => {
+      const idx = bp.lastIndexOf(":");
+      if (idx <= 0) return null;
+      const file = bp.slice(0, idx);
+      const line = Number(bp.slice(idx + 1));
+      return file === state.activeFile && Number.isFinite(line) ? line : null;
+    })
+    .filter((line) => line != null);
+  const currentLine = state.debugFrame && state.debugFrame.file === state.activeFile
+    ? state.debugFrame.line
+    : null;
+  callEditorAdapterMethod("setDebugMarkers", { breakpoints, currentLine });
+}
+
+function onDebugPaused(frame) {
+  state.debugPaused = true;
+  state.debugFrame = frame || null;
+  updateRunStatus("debugpaused");
+  renderDebugPanel();
+  if (frame && frame.file && getFileByName(frame.file)) {
+    if (state.activeFile !== frame.file) {
+      setActiveFile(frame.file);
+    }
+    setEditorLineHighlight(frame.line);
+    scrollEditorToLine(frame.line);
+  }
+}
+
+function onDebugResumed() {
+  state.debugPaused = false;
+  state.debugFrame = null;
+  clearEditorLineHighlight();
+  updateRunStatus("debugrunning");
+  renderDebugPanel();
+}
+
+function resumeDebug(command) {
+  if (!cppEngine || !state.debugPaused) return;
+  if (command === "stepOver") cppEngine.stepOver();
+  else if (command === "stepInto") cppEngine.stepInto();
+  else if (command === "stepOut") cppEngine.stepOut();
+  else cppEngine.continueDebug();
+  onDebugResumed();
 }
 
 function escapeHtml(value) {
@@ -2117,7 +2301,7 @@ async function shareProject() {
   if (state.mode !== "project") {
     return;
   }
-  const files = state.project.files;
+  const files = getPortableProjectFiles(state.project.files);
   const assets = state.project.assets || [];
   if (assets.length) {
     showToast("Шеринг недоступен при наличии ресурсов. Используйте экспорт.");
@@ -2526,6 +2710,10 @@ async function importFiles(files) {
   let skipped = 0;
   for (const file of files) {
     const name = String(file.name || "");
+    if (isGeneratedRuntimeArtifactName(name)) {
+      skipped += 1;
+      continue;
+    }
     const lower = name.toLowerCase();
     if (hasSourceExtension(lower)) {
       const content = await file.text();
@@ -2582,6 +2770,9 @@ function extractPyFromZip(bytes) {
     }
     // Исходники И файлы-данные: проект должен полностью round-trip'иться.
     const base = getBaseName(entryName);
+    if (isGeneratedRuntimeArtifactName(base)) {
+      continue;
+    }
     const content = decoder.decode(data);
     out.push({ name: base, content });
   }
@@ -2608,6 +2799,9 @@ function extractPyFromJson(text) {
       continue;
     }
     const name = String(file.name);
+    if (isGeneratedRuntimeArtifactName(name)) {
+      continue;
+    }
     out.push({ name, content: String(file.content || "") });
   }
   if (skippedAssets) {
@@ -2749,7 +2943,7 @@ async function exportAsJson() {
     version: 1,
     project: {
       title: state.project.title,
-      files: state.project.files,
+      files: getPortableProjectFiles(state.project.files),
       assets
     }
   };
@@ -2759,7 +2953,7 @@ async function exportAsJson() {
 
 async function exportAsZip() {
   const entries = [];
-  state.project.files.forEach((file) => {
+  getPortableProjectFiles(state.project.files).forEach((file) => {
     entries.push({ name: file.name, data: encoder.encode(file.content || "") });
   });
   for (const asset of state.project.assets) {
@@ -3239,6 +3433,7 @@ async function runActiveFile() {
   const runToken = state.runToken + 1;
   state.runToken = runToken;
   els.stopBtn.disabled = false;
+  if (els.debugBtn) els.debugBtn.disabled = true;
   updateRunStatus("compiling");
 
   // --- Компиляция ---
@@ -3315,6 +3510,134 @@ async function runActiveFile() {
     applyOutputFiles(runResult.outputFiles);
   }
 
+  els.stopBtn.disabled = true;
+  if (els.debugBtn) els.debugBtn.disabled = false;
+}
+
+async function debugActiveFile() {
+  if (state.runtimeBlocked || !state.runtimeReady) {
+    showGuard(true);
+    return;
+  }
+
+  const entryName = MAIN_FILE;
+  if (!getFileByName(entryName)) {
+    showToast("Нет main.cpp.");
+    return;
+  }
+  if (state.activeFile !== MAIN_FILE) {
+    setActiveFile(MAIN_FILE);
+  }
+  clearEditorLineHighlight();
+  renderDebugPanel();
+
+  const files = getCurrentFiles().map((f) => ({
+    name: f.name,
+    content: String(f.content ?? "")
+  }));
+  const dataFiles = getCurrentFiles()
+    .filter((f) => !hasSourceExtension(f.name))
+    .map((f) => ({ name: f.name, content: String(f.content ?? "") }));
+
+  if (isMobileViewport()) {
+    setUiCard("console");
+  }
+  clearConsole();
+  if (els.consoleInput) els.consoleInput.value = "";
+
+  const runToken = state.runToken + 1;
+  state.runToken = runToken;
+  state.debugActive = true;
+  state.debugPaused = false;
+  state.debugFrame = null;
+  els.stopBtn.disabled = false;
+  if (els.runBtn) els.runBtn.disabled = true;
+  if (els.debugBtn) els.debugBtn.disabled = true;
+  updateRunStatus("debugcompiling");
+  renderDebugPanel();
+
+  let compileResult;
+  try {
+    compileResult = await cppEngine.compile(files, {
+      entry: entryName,
+      debug: true,
+      breakpoints: state.debugBreakpoints
+    });
+  } catch (error) {
+    if (state.runToken !== runToken) return;
+    appendConsole(`\n${String((error && error.message) || error)}\n`, true);
+    state.debugActive = false;
+    hardStop("debugerror");
+    renderDebugPanel();
+    return;
+  }
+  if (state.runToken !== runToken) return;
+
+  printCompileDiagnostics(compileResult);
+  if (!compileResult.ok) {
+    state.debugActive = false;
+    hardStop("debugerror");
+    renderDebugPanel();
+    return;
+  }
+
+  appendConsoleLabel("Отладка", "ok");
+  appendConsoleStyled("Debug mode: программа остановится на первой исполняемой строке или breakpoint.", "c-dim");
+  updateRunStatus("debugrunning");
+  state.running = true;
+
+  let runResult;
+  try {
+    runResult = await cppEngine.run({
+      stdin: "",
+      files: dataFiles,
+      debug: {
+        map: compileResult.debug?.map,
+        breakpoints: state.debugBreakpoints
+      },
+      onStdout: (text) => appendConsole(text, false),
+      onStderr: (text) => appendConsole(text, true),
+      onNeedInput: () => setConsoleInputWaiting(true),
+      onDebugPaused
+    });
+  } catch (error) {
+    if (state.runToken !== runToken) return;
+    state.running = false;
+    state.debugActive = false;
+    appendConsole(`\n${String((error && error.message) || error)}\n`, true);
+    hardStop("debugerror");
+    renderDebugPanel();
+    return;
+  }
+  if (state.runToken !== runToken) return;
+
+  state.running = false;
+  state.debugActive = false;
+  state.debugPaused = false;
+  state.debugFrame = null;
+  clearEditorLineHighlight();
+  setConsoleInputWaiting(false);
+  renderDebugPanel();
+
+  if (runResult.timedOut) {
+    appendConsole(`\nПревышен лимит времени выполнения (${Math.round(CONFIG.RUN_TIMEOUT_MS / 1000)} с).\n`, true);
+    updateRunStatus("debugerror");
+  } else if (runResult.error) {
+    appendConsole(`\n${runResult.error}\n`, true);
+    updateRunStatus("debugerror");
+  } else {
+    appendConsoleStyled(`\nОтладка завершена с кодом ${runResult.exitCode ?? 0}`,
+      runResult.exitCode ? "console-error" : "c-dim");
+    updateRunStatus("debugdone");
+  }
+  if (runResult.truncated) {
+    appendConsole(`\n[вывод обрезан]\n`, true);
+  }
+  if (Array.isArray(runResult.outputFiles) && runResult.outputFiles.length) {
+    applyOutputFiles(runResult.outputFiles);
+  }
+  if (els.runBtn) els.runBtn.disabled = false;
+  if (els.debugBtn) els.debugBtn.disabled = false;
   els.stopBtn.disabled = true;
 }
 
@@ -3463,12 +3786,18 @@ function hardStop(status = "stopped") {
     cppEngine.cancelRun();
   }
   state.running = false;
+  state.debugActive = false;
+  state.debugPaused = false;
+  state.debugFrame = null;
   state.stdinQueue = [];
   setConsoleInputWaiting(false);
   state.stdinResolver = null;
   updateRunStatus(status);
   enableConsoleInput();
+  if (els.runBtn) els.runBtn.disabled = false;
+  if (els.debugBtn) els.debugBtn.disabled = false;
   els.stopBtn.disabled = true;
+  renderDebugPanel();
 }
 
 

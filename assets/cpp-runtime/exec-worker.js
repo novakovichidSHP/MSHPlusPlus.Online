@@ -24,12 +24,15 @@
  *        { type:'error', message }             — ошибка выполнения/инстанса
  */
 
+import { applyDebugCommand, createDebugSession, evaluateDebugPoint } from "./debug-state.js";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 let started = false;
 let inputBytes = new Uint8Array(0);
 let inputPtr = 0;
+let debugSession = null;
 
 // Добавить порцию пользовательского ввода в буфер (busy-poll в C++ его подхватит).
 function feedInput(text) {
@@ -47,6 +50,12 @@ self.onmessage = (event) => {
     feedInput(m.text);
     return;
   }
+  if (m.type === "debug-command") {
+    if (applyDebugCommand(debugSession, m.command)) {
+      self.postMessage({ type: "debug-resumed" });
+    }
+    return;
+  }
   if (started) return;
   started = true;
   start(m);
@@ -62,13 +71,18 @@ function sameBytes(a, b) {
   return true;
 }
 
-async function start({ moduleJs, stdin, files, maxOutputBytes }) {
+function postDebugPaused(frame) {
+  self.postMessage({ type: "debug-paused", frame });
+}
+
+async function start({ moduleJs, stdin, files, maxOutputBytes, debug }) {
   if (typeof moduleJs !== "string") {
     self.postMessage({ type: "error", message: "exec-worker: нет moduleJs" });
     return;
   }
   inputBytes = encoder.encode(typeof stdin === "string" ? stdin : "");
   inputPtr = 0;
+  debugSession = createDebugSession(debug);
   const cap = Number.isFinite(maxOutputBytes) ? maxOutputBytes : 2_000_000;
 
   // Файлы-данные проекта (вход) и снимок того, что мы записали — чтобы потом
@@ -186,6 +200,11 @@ async function start({ moduleJs, stdin, files, maxOutputBytes }) {
     __outWrite: (bytes) => {
       if (truncated || !bytes || !bytes.length) return;
       emitRaw("stdout", decoder.decode(bytes, { stream: true }));
+    },
+    __debugPoll: (fileId, line, functionId, varsJson) => {
+      const result = evaluateDebugPoint(debugSession, fileId, line, functionId, varsJson);
+      if (result.enteredPause && result.frame) postDebugPaused(result.frame);
+      return result.pause ? 1 : 0;
     },
     // ЕДИНСТВЕННЫЙ достоверный сигнал завершения программы.
     onExit: (code) => finish(code),

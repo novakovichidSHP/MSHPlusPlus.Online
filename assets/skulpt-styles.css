@@ -754,6 +754,69 @@ body {
   overflow-x: auto;
 }
 
+.debug-panel {
+  border-top: 1px solid var(--border);
+  background: rgba(236, 243, 255, 0.95);
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.debug-panel.hidden {
+  display: none;
+}
+
+.debug-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.debug-info {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.debug-info span {
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.debug-watch-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.debug-watch-input {
+  min-width: 120px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  font-family: "JetBrains Mono", monospace;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text);
+}
+
+.debug-paused-line {
+  background: rgba(255, 193, 7, 0.18);
+}
+
+.debug-breakpoint-chip {
+  color: #d4365f;
+  font-weight: 700;
+}
+
 .tab {
   padding: 8px 12px;
   border-radius: 10px;
@@ -841,6 +904,31 @@ body {
 
 .cm6-editor-host .cm-lineNumbers {
   min-width: var(--editor-gutter-min-width);
+}
+
+.cm6-editor-host .cm-debug-gutter {
+  min-width: 18px;
+  color: #d4365f;
+  background: rgba(236, 243, 255, 0.95);
+  border-right: 1px solid rgba(212, 54, 95, 0.12);
+}
+
+.cm6-editor-host .cm-debug-breakpoint-dot {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  color: #d4365f;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.cm6-editor-host .cm-debug-breakpoint-line {
+  background: rgba(212, 54, 95, 0.08);
+}
+
+.cm6-editor-host .cm-debug-current-line {
+  background: rgba(255, 193, 7, 0.22);
+  box-shadow: inset 3px 0 0 #f6b800;
 }
 
 .console-pane {

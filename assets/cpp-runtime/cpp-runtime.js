@@ -18,6 +18,7 @@
 
 import * as Comlink from "./vendor/comlink.min.mjs";
 import { parseDiagnostics, summarizeDiagnostics } from "./diagnostics.js";
+import { buildDebugInstrumentation, createDebugKey } from "./debug-instrumentation.js";
 
 export const DEFAULTS = {
   // Каталог с артефактами emception (worker, wasm, sysroot). Same-origin!
@@ -152,6 +153,27 @@ const CPPIO_LIB = `mergeInto(LibraryManager.library, {
 `;
 const CPPIO_SOURCE_NAME = "__cppio.cpp";
 const CPPIO_LIB_NAME = "__cppio_lib.js";
+
+const DEBUG_SOURCE_NAME = "__debug_runtime.cpp";
+const DEBUG_LIB_NAME = "__debug_runtime_lib.js";
+const DEBUG_RUNTIME_SRC = `#include <emscripten.h>
+extern "C" int __cpp_debug_poll(int fileId, int line, int functionId, const char* varsJson);
+extern "C" void __cpp_debug_point(int fileId, int line, int functionId, const char* varsJson) {
+  while (__cpp_debug_poll(fileId, line, functionId, varsJson)) {
+    emscripten_sleep(15);
+  }
+}
+`;
+const DEBUG_RUNTIME_LIB = `mergeInto(LibraryManager.library, {
+  __cpp_debug_poll: function (fileId, line, functionId, varsPtr) {
+    var varsJson = "";
+    if (varsPtr) {
+      try { varsJson = UTF8ToString(varsPtr); } catch (e) { varsJson = ""; }
+    }
+    return Module.__debugPoll ? Module.__debugPoll(fileId, line, functionId, varsJson) : 0;
+  }
+});
+`;
 
 // --- Бэкпорт C++20 <format> через header-only {fmt} ---
 // Тулчейн несёт libc++14, в котором нет рабочего std::format (нужен libc++17+).
@@ -571,6 +593,8 @@ class CppRuntime {
     this._fmtWritten = false;   // вендоренные хедеры {fmt} уже в ФС воркера?
     this._rangesWritten = false; // шим std::ranges уже в ФС воркера?
     this._viewsWritten = false;  // шим std::views уже в ФС воркера?
+    this._debugMap = null;
+    this._debugBreakpoints = new Set();
   }
 
   get ready() {
@@ -654,6 +678,13 @@ class CppRuntime {
   async compile(files, opts = {}) {
     if (!this._emception) await this.init();
     this._validateFiles(files);
+    const debugEnabled = Boolean(opts.debug);
+    const debugBuild = debugEnabled
+      ? buildDebugInstrumentation(files, { breakpoints: opts.breakpoints || [] })
+      : null;
+    const compileFiles = debugBuild ? debugBuild.files : files;
+    this._debugMap = debugBuild ? debugBuild.map : null;
+    this._debugBreakpoints = new Set(debugEnabled ? (opts.breakpoints || []) : []);
 
     // Безопасность (см. FORBIDDEN_JS_RE): не даём коду проекта исполнять
     // произвольный JS в браузере. Останавливаемся ДО запуска компилятора.
@@ -677,12 +708,14 @@ class CppRuntime {
       };
     }
 
-    const flags = opts.flags || this.options.flags;
+    const flags = opts.flags || (debugEnabled
+      ? this.options.flags.filter((flag) => flag !== "-O2").concat(["-O0", "-g"])
+      : this.options.flags);
     const dir = this.options.workingDir;
     const sources = [];
 
     // Записываем все единицы трансляции и заголовки в рабочий каталог.
-    for (const f of files) {
+    for (const f of compileFiles) {
       await this._emception.fileSystem.writeFile(`${dir}/${f.name}`, f.content);
       if (SOURCE_RE.test(f.name)) sources.push(f.name);
     }
@@ -697,6 +730,13 @@ class CppRuntime {
     await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_SOURCE_NAME}`, CPPIO_SRC);
     await this._emception.fileSystem.writeFile(`${dir}/${CPPIO_LIB_NAME}`, CPPIO_LIB);
     sources.push(CPPIO_SOURCE_NAME);
+    let moduleFlags = this.options.moduleFlags;
+    if (debugEnabled) {
+      await this._emception.fileSystem.writeFile(`${dir}/${DEBUG_SOURCE_NAME}`, DEBUG_RUNTIME_SRC);
+      await this._emception.fileSystem.writeFile(`${dir}/${DEBUG_LIB_NAME}`, DEBUG_RUNTIME_LIB);
+      sources.push(DEBUG_SOURCE_NAME);
+      moduleFlags = [...moduleFlags, "--js-library", `${dir}/${DEBUG_LIB_NAME}`];
+    }
 
     // Бэкпорты C++20: если пользователь использует std::format / std::ranges —
     // подкладываем нужную прелюдию и force-include'им её. В обычных программах
@@ -722,7 +762,7 @@ class CppRuntime {
       "em++",
       ...flags,
       ...extraFlags,
-      ...this.options.moduleFlags,
+      ...moduleFlags,
       ...sources,
       "-o",
       "out.js"
@@ -750,7 +790,7 @@ class CppRuntime {
       // Диагностику из служебных единиц тулчейна (наш __cppio.cpp, C++20-шимы,
       // хедеры {fmt}) НЕ показываем студенту — это не его код. Под -Wall/-Wextra
       // такие файлы могут давать свои предупреждения, засоряя консоль.
-      internalFiles: [CPPIO_SOURCE_NAME, FMT_SHIM_NAME, RANGES_SHIM_NAME, VIEWS_SHIM_NAME, ...FMT_HEADER_NAMES]
+      internalFiles: [CPPIO_SOURCE_NAME, DEBUG_SOURCE_NAME, FMT_SHIM_NAME, RANGES_SHIM_NAME, VIEWS_SHIM_NAME, ...FMT_HEADER_NAMES]
     });
     const ok = result && result.returncode === 0;
 
@@ -767,6 +807,7 @@ class CppRuntime {
       diagnostics,
       summary: ok ? summarizeDiagnostics(diagnostics) : (diagnostics.firstError?.message || "Ошибка компиляции"),
       durationMs,
+      debug: debugEnabled ? { map: this._debugMap } : null,
       // Честная команда для консоли: реальные пользовательские флаги (вкл.
       // -Wall -Wextra) + исходники пользователя, без служебной кухни тулчейна
       // (em++, __cppio.cpp, module-флаги, -D-дефайны).
@@ -796,9 +837,15 @@ class CppRuntime {
 
     const timeoutMs = opts.timeoutMs ?? this.options.runTimeoutMs;
     const moduleJs = this._lastModuleJs;
+    const debug = opts.debug
+      ? {
+        map: opts.debug.map || this._debugMap,
+        breakpoints: Array.from(opts.debug.breakpoints || this._debugBreakpoints || [])
+      }
+      : null;
 
     return new Promise((resolve) => {
-      const worker = new Worker(new URL("./exec-worker.js?b=17", import.meta.url));
+      const worker = new Worker(new URL("./exec-worker.js?b=19", import.meta.url), { type: "module" });
       this._execWorker = worker;
 
       let exitCode = null;
@@ -845,7 +892,8 @@ class CppRuntime {
               moduleJs,
               stdin: opts.stdin || "",
               files: Array.isArray(opts.files) ? opts.files : [],
-              maxOutputBytes: this.options.maxOutputBytes
+              maxOutputBytes: this.options.maxOutputBytes,
+              debug
             });
             break;
           case "stdout":
@@ -860,6 +908,14 @@ class CppRuntime {
             // программа ждёт ввод (std::cin) — часы стоят, UI активирует поле ввода
             stopTimer();
             opts.onNeedInput && opts.onNeedInput();
+            break;
+          case "debug-paused":
+            stopTimer();
+            opts.onDebugPaused && opts.onDebugPaused(m.frame);
+            break;
+          case "debug-resumed":
+            armTimer();
+            opts.onDebugResumed && opts.onDebugResumed();
             break;
           case "output-files":
             // файлы, созданные/изменённые программой в /work (файловый вывод)
@@ -884,6 +940,34 @@ class CppRuntime {
       // provideInput() возобновляет выполнение → перезапускаем счётчик времени.
       worker._armTimer = armTimer;
     });
+  }
+
+  continueDebug() {
+    if (this._execWorker) {
+      this._execWorker.postMessage({ type: "debug-command", command: "continue" });
+      if (typeof this._execWorker._armTimer === "function") this._execWorker._armTimer();
+    }
+  }
+
+  stepOver() {
+    if (this._execWorker) {
+      this._execWorker.postMessage({ type: "debug-command", command: "stepOver" });
+      if (typeof this._execWorker._armTimer === "function") this._execWorker._armTimer();
+    }
+  }
+
+  stepInto() {
+    if (this._execWorker) {
+      this._execWorker.postMessage({ type: "debug-command", command: "stepInto" });
+      if (typeof this._execWorker._armTimer === "function") this._execWorker._armTimer();
+    }
+  }
+
+  stepOut() {
+    if (this._execWorker) {
+      this._execWorker.postMessage({ type: "debug-command", command: "stepOut" });
+      if (typeof this._execWorker._armTimer === "function") this._execWorker._armTimer();
+    }
   }
 
   /** Передать строку ввода работающей программе (интерактивный std::cin). */
