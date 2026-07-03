@@ -189,6 +189,7 @@ const els = {
   restartInline: document.getElementById("restart-ide-inline"),
   runBtn: document.getElementById("run-btn"),
   debugBtn: document.getElementById("debug-btn"),
+  debugStepStartBtn: document.getElementById("debug-step-start-btn"),
   stopBtn: document.getElementById("stop-btn"),
   debugPanel: document.getElementById("debug-panel"),
   debugBreakpointBtn: document.getElementById("debug-breakpoint-btn"),
@@ -510,7 +511,10 @@ function bindUi() {
 
   els.runBtn.addEventListener("click", runActiveFile);
   if (els.debugBtn) {
-    els.debugBtn.addEventListener("click", debugActiveFile);
+    els.debugBtn.addEventListener("click", () => debugActiveFile("breakpoints"));
+  }
+  if (els.debugStepStartBtn) {
+    els.debugStepStartBtn.addEventListener("click", () => debugActiveFile("entry"));
   }
   els.stopBtn.addEventListener("click", stopRun);
   if (els.debugBreakpointBtn) {
@@ -3434,6 +3438,7 @@ async function runActiveFile() {
   state.runToken = runToken;
   els.stopBtn.disabled = false;
   if (els.debugBtn) els.debugBtn.disabled = true;
+  if (els.debugStepStartBtn) els.debugStepStartBtn.disabled = true;
   updateRunStatus("compiling");
 
   // --- Компиляция ---
@@ -3512,9 +3517,10 @@ async function runActiveFile() {
 
   els.stopBtn.disabled = true;
   if (els.debugBtn) els.debugBtn.disabled = false;
+  if (els.debugStepStartBtn) els.debugStepStartBtn.disabled = false;
 }
 
-async function debugActiveFile() {
+async function debugActiveFile(startMode = "breakpoints") {
   if (state.runtimeBlocked || !state.runtimeReady) {
     showGuard(true);
     return;
@@ -3553,6 +3559,7 @@ async function debugActiveFile() {
   els.stopBtn.disabled = false;
   if (els.runBtn) els.runBtn.disabled = true;
   if (els.debugBtn) els.debugBtn.disabled = true;
+  if (els.debugStepStartBtn) els.debugStepStartBtn.disabled = true;
   updateRunStatus("debugcompiling");
   renderDebugPanel();
 
@@ -3582,7 +3589,12 @@ async function debugActiveFile() {
   }
 
   appendConsoleLabel("Отладка", "ok");
-  appendConsoleStyled("Debug mode: программа остановится на первой исполняемой строке или breakpoint.", "c-dim");
+  appendConsoleStyled(
+    startMode === "entry"
+      ? "Step mode: программа остановлена на первой исполняемой строке."
+      : "Debug mode: программа остановится на breakpoint или завершится.",
+    "c-dim"
+  );
   updateRunStatus("debugrunning");
   state.running = true;
 
@@ -3593,7 +3605,8 @@ async function debugActiveFile() {
       files: dataFiles,
       debug: {
         map: compileResult.debug?.map,
-        breakpoints: state.debugBreakpoints
+        breakpoints: state.debugBreakpoints,
+        startMode
       },
       onStdout: (text) => appendConsole(text, false),
       onStderr: (text) => appendConsole(text, true),
@@ -3638,6 +3651,7 @@ async function debugActiveFile() {
   }
   if (els.runBtn) els.runBtn.disabled = false;
   if (els.debugBtn) els.debugBtn.disabled = false;
+  if (els.debugStepStartBtn) els.debugStepStartBtn.disabled = false;
   els.stopBtn.disabled = true;
 }
 
@@ -3796,6 +3810,7 @@ function hardStop(status = "stopped") {
   enableConsoleInput();
   if (els.runBtn) els.runBtn.disabled = false;
   if (els.debugBtn) els.debugBtn.disabled = false;
+  if (els.debugStepStartBtn) els.debugStepStartBtn.disabled = false;
   els.stopBtn.disabled = true;
   renderDebugPanel();
 }

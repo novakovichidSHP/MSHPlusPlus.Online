@@ -16,8 +16,8 @@ const debugMap = {
   ]
 };
 
-test("debug session pauses on first entry point", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: [] });
+test("entry start mode pauses on first entry point", () => {
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
   const result = evaluateDebugPoint(session, 1, 3, 1);
   assert.equal(result.pause, true);
   assert.equal(result.enteredPause, true);
@@ -25,8 +25,23 @@ test("debug session pauses on first entry point", () => {
   assert.equal(result.frame.functionName, "main");
 });
 
+test("breakpoints start mode runs past first line without breakpoint", () => {
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "breakpoints" });
+  assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, false);
+  assert.equal(evaluateDebugPoint(session, 1, 4, 1).pause, false);
+});
+
+test("breakpoints start mode pauses on first breakpoint only", () => {
+  const session = createDebugSession({ map: debugMap, breakpoints: ["main.cpp:5"], startMode: "breakpoints" });
+  assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, false);
+  assert.equal(evaluateDebugPoint(session, 1, 4, 1).pause, false);
+  const result = evaluateDebugPoint(session, 1, 5, 1);
+  assert.equal(result.pause, true);
+  assert.equal(result.enteredPause, true);
+});
+
 test("paused session does not re-enter pause on every poll", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: [] });
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
   const first = evaluateDebugPoint(session, 1, 3, 1);
   const second = evaluateDebugPoint(session, 1, 3, 1);
   assert.equal(first.pause, true);
@@ -36,7 +51,7 @@ test("paused session does not re-enter pause on every poll", () => {
 });
 
 test("continue skips the current point and later stops on breakpoint", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: ["main.cpp:5"] });
+  const session = createDebugSession({ map: debugMap, breakpoints: ["main.cpp:5"], startMode: "entry" });
   assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, true);
   applyDebugCommand(session, "continue");
   assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, false);
@@ -45,14 +60,14 @@ test("continue skips the current point and later stops on breakpoint", () => {
 });
 
 test("stepInto pauses on the next distinct hook in any function", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: [] });
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
   assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, true);
   applyDebugCommand(session, "stepInto");
   assert.equal(evaluateDebugPoint(session, 1, 4, 2).pause, true);
 });
 
 test("stepOver waits for the next hook in the same function", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: [] });
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
   assert.equal(evaluateDebugPoint(session, 1, 3, 1).pause, true);
   applyDebugCommand(session, "stepOver");
   assert.equal(evaluateDebugPoint(session, 1, 4, 2).pause, false);
@@ -60,7 +75,7 @@ test("stepOver waits for the next hook in the same function", () => {
 });
 
 test("stepOut pauses after returning to a different function", () => {
-  const session = createDebugSession({ map: debugMap, breakpoints: [] });
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
   assert.equal(evaluateDebugPoint(session, 1, 4, 2).pause, true);
   applyDebugCommand(session, "stepOut");
   assert.equal(evaluateDebugPoint(session, 1, 5, 2).pause, false);
@@ -80,7 +95,7 @@ test("debug state tolerates missing sessions and unknown ids", () => {
   assert.equal(applyDebugCommand(null, "continue"), null);
   assert.deepEqual(evaluateDebugPoint(null, 1, 1, 1), { pause: false, frame: null, enteredPause: false });
 
-  const session = createDebugSession({ map: { files: [], functions: [] }, breakpoints: [] });
+  const session = createDebugSession({ map: { files: [], functions: [] }, breakpoints: [], startMode: "entry" });
   const result = evaluateDebugPoint(session, 99, 7, 42, "[]");
   assert.equal(result.pause, true);
   assert.equal(result.frame.file, "<unknown>");

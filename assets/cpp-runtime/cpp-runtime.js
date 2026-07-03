@@ -840,7 +840,8 @@ class CppRuntime {
     const debug = opts.debug
       ? {
         map: opts.debug.map || this._debugMap,
-        breakpoints: Array.from(opts.debug.breakpoints || this._debugBreakpoints || [])
+        breakpoints: Array.from(opts.debug.breakpoints || this._debugBreakpoints || []),
+        startMode: opts.debug.startMode === "entry" ? "entry" : "breakpoints"
       }
       : null;
 

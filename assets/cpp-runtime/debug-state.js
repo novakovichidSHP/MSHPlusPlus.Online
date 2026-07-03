@@ -6,13 +6,15 @@ export function createDebugSession(debug) {
   if (!debug || !debug.map) return null;
   const filesById = new Map((debug.map.files || []).map((file) => [Number(file.id), file.name]));
   const functionsById = new Map((debug.map.functions || []).map((fn) => [Number(fn.id), fn.name]));
+  const startMode = debug.startMode === "entry" ? "entry" : "breakpoints";
   return {
     filesById,
     functionsById,
     breakpoints: new Set(debug.breakpoints || []),
     paused: false,
     last: null,
-    resumeMode: "entry",
+    resumeMode: startMode === "entry" ? "entry" : "continue",
+    startMode,
     skipKey: null,
     stepTargetFunctionId: null
   };
