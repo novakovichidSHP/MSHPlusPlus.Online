@@ -2121,6 +2121,80 @@ body[data-theme="dark"] .btn.remix {
   color: #7bf0ad;
 }
 
+/* Dark theme completion: these overrides must live after the base IDE rules,
+   otherwise later light-surface rules repaint the debugger and editor gutter. */
+body[data-theme="dark"] .workspace {
+  background: var(--border);
+}
+
+body[data-theme="dark"] .editor-pane,
+body[data-theme="dark"] .panel,
+body[data-theme="dark"] .console-pane {
+  background: var(--panel);
+}
+
+body[data-theme="dark"] .editor-toolbar,
+body[data-theme="dark"] .panel-header,
+body[data-theme="dark"] .tabs,
+body[data-theme="dark"] .debug-panel {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .debug-info {
+  color: var(--muted);
+}
+
+body[data-theme="dark"] .debug-info span {
+  color: var(--text);
+}
+
+body[data-theme="dark"] .debug-controls .btn {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .debug-controls .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+body[data-theme="dark"] .debug-controls .btn:disabled {
+  background: var(--panel-3);
+  border-color: var(--border);
+  color: var(--faint);
+}
+
+body[data-theme="dark"] .debug-watch-input,
+body[data-theme="dark"] .modal-input {
+  background: #160e36;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .debug-watch-input::placeholder {
+  color: var(--faint);
+}
+
+body[data-theme="dark"] .cm6-editor-host .cm-gutters,
+body[data-theme="dark"] .cm6-editor-host .cm-debug-gutter,
+body[data-theme="dark"] .line-numbers {
+  background: var(--panel-2);
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .cm6-editor-host .cm-debug-breakpoint-line {
+  background: rgba(255, 107, 111, 0.13);
+}
+
+body[data-theme="dark"] .cm6-editor-host .cm-debug-current-line,
+body[data-theme="dark"] .debug-paused-line {
+  background: rgba(255, 184, 108, 0.18);
+}
+
 /* run-status — пилюля, цвет по состоянию (data-state ставит updateRunStatus) */
 .run-status {
   background: var(--panel-3);
