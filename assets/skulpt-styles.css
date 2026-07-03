@@ -759,9 +759,10 @@ body {
   background: rgba(236, 243, 255, 0.95);
   padding: 8px 12px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   gap: 10px;
   align-items: center;
+  min-width: 0;
 }
 
 .debug-panel.hidden {
@@ -773,6 +774,7 @@ body {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+  min-width: 0;
 }
 
 .debug-info {
@@ -781,6 +783,15 @@ body {
   font-size: 12px;
   color: var(--muted);
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.debug-info > div,
+.debug-watch-row {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .debug-info span {
@@ -790,14 +801,15 @@ body {
 }
 
 .debug-watch-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 6px;
   align-items: center;
   min-width: 0;
 }
 
 .debug-watch-input {
-  min-width: 120px;
+  min-width: 0;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -951,6 +963,8 @@ body {
 
 .console-output {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 12px 14px;
   font-family: "JetBrains Mono", monospace;
@@ -966,6 +980,14 @@ body {
   white-space: pre-wrap;
 }
 
+.console-diagnostic {
+  display: block;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .console-input-row {
   display: flex;
   gap: 10px;
@@ -978,6 +1000,7 @@ body {
    моноширинный, цвета вывода; каретка приклеена к концу вывода программы. */
 .console-input {
   display: inline;
+  max-width: 100%;
   font-family: "JetBrains Mono", monospace;
   font-size: 12.5px;
   line-height: inherit;

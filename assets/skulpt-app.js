@@ -3124,6 +3124,17 @@ function appendConsoleStyled(text, className) {
   els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
 
+function looksLikeCompilerDiagnostic(text) {
+  return /(^|\n)[^\s:\n][^:\n]*:\d+:\d+:\s+(?:fatal error|error|warning|note|remark):/.test(String(text ?? ""));
+}
+
+function appendRuntimeStderr(text) {
+  if (looksLikeCompilerDiagnostic(text)) {
+    return;
+  }
+  appendConsole(text, true);
+}
+
 function appendConsole(text, isError) {
   if (state.outputBytes >= CONFIG.MAX_OUTPUT_BYTES) {
     return;
@@ -3478,7 +3489,7 @@ async function runActiveFile() {
       stdin: "",
       files: dataFiles,
       onStdout: (text) => appendConsole(text, false),
-      onStderr: (text) => appendConsole(text, true),
+      onStderr: appendRuntimeStderr,
       onNeedInput: () => setConsoleInputWaiting(true)
     });
   } catch (error) {
@@ -3609,7 +3620,7 @@ async function debugActiveFile(startMode = "breakpoints") {
         startMode
       },
       onStdout: (text) => appendConsole(text, false),
-      onStderr: (text) => appendConsole(text, true),
+      onStderr: appendRuntimeStderr,
       onNeedInput: () => setConsoleInputWaiting(true),
       onDebugPaused
     });
@@ -3746,14 +3757,13 @@ function printCompileDiagnostics(result) {
  */
 function appendDiagnosticLine(item) {
   const span = document.createElement("span");
-  span.className = item.severity === "error" ? "console-error" : "";
+  span.className = item.severity === "error" ? "console-diagnostic console-error" : "console-diagnostic";
   span.textContent = `${item.file}:${item.line}:${item.col}: ${item.severity}: ${item.message}`;
   span.style.cursor = "pointer";
   span.style.textDecoration = "underline dotted";
   span.title = "Перейти к строке";
   span.addEventListener("click", () => jumpToDiagnostic(item));
-  els.consoleOutput.appendChild(span);
-  els.consoleOutput.appendChild(document.createElement("br"));
+  consoleInsert(span);
   els.consoleOutput.scrollTop = els.consoleOutput.scrollHeight;
 }
 
