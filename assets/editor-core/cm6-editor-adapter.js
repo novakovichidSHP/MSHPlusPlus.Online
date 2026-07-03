@@ -1,6 +1,6 @@
 import { runEditorCommand } from "./editor-command-runner.js";
 import { resolveEditorShortcut } from "./editor-shortcuts.js";
-import { createCodeMirrorEditor } from "../vendor/cm6/codemirror.bundle.js";
+import { createCodeMirrorEditor } from "../vendor/cm6/codemirror.bundle.js?v=2";
 
 function noop() { }
 
@@ -27,7 +27,8 @@ export function createCm6EditorAdapter({
   editorStack,
   editorWrap,
   editorHighlight,
-  lineNumbers
+  lineNumbers,
+  onDebugGutterClick
 }) {
   const changeHandlers = new Set();
   const scrollHandlers = new Set();
@@ -38,6 +39,7 @@ export function createCm6EditorAdapter({
   let detachMirrorScroll = noop;
   let suppressMirrorSync = false;
   let currentTabSize = 4;
+  let debugMarkers = { breakpoints: [], currentLine: null };
 
   const emit = (handlers, payload) => {
     handlers.forEach((handler) => {
@@ -232,6 +234,11 @@ export function createCm6EditorAdapter({
         },
         onShortcutKeydown(event) {
           return adapter.handleKeydown(event, { tabSize: currentTabSize }).handled;
+        },
+        onDebugGutterClick(lineNumber) {
+          if (typeof onDebugGutterClick === "function") {
+            onDebugGutterClick(lineNumber);
+          }
         }
       });
       syncMirrorFromCm6();
@@ -318,6 +325,17 @@ export function createCm6EditorAdapter({
     },
     setTheme(theme) {
       cm6?.setTheme(theme === "dark" ? "dark" : "light");
+    },
+    setDebugMarkers(markers = {}) {
+      debugMarkers = {
+        breakpoints: Array.isArray(markers.breakpoints) ? markers.breakpoints : [],
+        currentLine: markers.currentLine || null
+      };
+      cm6?.setDebugMarkers(debugMarkers);
+      if (editorWrap) {
+        editorWrap.dataset.debugCurrentLine = debugMarkers.currentLine ? String(debugMarkers.currentLine) : "";
+        editorWrap.dataset.debugBreakpoints = debugMarkers.breakpoints.join(",");
+      }
     },
     refreshDecorations() { },
     syncDecorationsScroll() { },
