@@ -95,6 +95,32 @@ test("buildDebugInstrumentation handles chars, floats and multiple declarators",
   assert.match(code, /__cpp_debug_value\(b\)/);
 });
 
+test("buildDebugInstrumentation skips uninitialized scalars and arrays in declarations", () => {
+  const result = buildDebugInstrumentation([
+    {
+      name: "main.cpp",
+      content: "#include <iostream>\nint main() {\n  int a, b, c[1000] = {};\n  std::cin >> a >> b;\n  std::cout << a + b << \" \" << c[0];\n}\n"
+    }
+  ]);
+  const code = result.files[0].content;
+  assert.doesNotMatch(code, /__cpp_debug_value\(a\)/);
+  assert.doesNotMatch(code, /__cpp_debug_value\(b\)/);
+  assert.doesNotMatch(code, /__cpp_debug_value\(c\)/);
+});
+
+test("buildDebugInstrumentation keeps scalar direct initialization", () => {
+  const result = buildDebugInstrumentation([
+    {
+      name: "main.cpp",
+      content: "#include <string>\nint main() {\n  int a{};\n  int b(2);\n  std::string name(\"Ann\");\n  return a + b;\n}\n"
+    }
+  ]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_value\(a\)/);
+  assert.match(code, /__cpp_debug_value\(b\)/);
+  assert.match(code, /__cpp_debug_value\(name\)/);
+});
+
 test("buildDebugInstrumentation escapes string-like values through debug helper", () => {
   const result = buildDebugInstrumentation([
     {

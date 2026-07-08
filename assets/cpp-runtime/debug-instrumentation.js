@@ -89,16 +89,37 @@ function splitDeclarators(rest) {
   return out;
 }
 
+function hasTopLevelEquals(text) {
+  let depth = 0;
+  for (const ch of String(text || "")) {
+    if (ch === "(" || ch === "{" || ch === "[") depth += 1;
+    else if (ch === ")" || ch === "}" || ch === "]") depth -= 1;
+    else if (ch === "=" && depth === 0) return true;
+  }
+  return false;
+}
+
+function parseInitializedScalarDeclarator(item) {
+  const raw = String(item || "").trim();
+  if (!raw || /^[*&]/.test(raw)) return null;
+  const m = /^([A-Za-z_]\w*)(?<suffix>[\s\S]*)$/.exec(raw);
+  if (!m || !m.groups) return null;
+  const name = m[1];
+  const suffix = m.groups.suffix.trimStart();
+  if (suffix.startsWith("[")) return null;
+  const initialized = hasTopLevelEquals(raw)
+    || suffix.startsWith("{")
+    || (suffix.startsWith("(") && !/^\(\s*\)\s*$/.test(suffix));
+  return initialized ? name : null;
+}
+
 function extractDeclaredVariables(trimmed) {
   const m = SIMPLE_DECL_RE.exec(trimmed);
   if (!m || !m.groups) return [];
   const type = m.groups.type.replace(/\s+/g, " ");
   return splitDeclarators(m.groups.rest)
     .map((item) => {
-      const raw = item.split("=")[0].trim();
-      if (/^[*&]/.test(raw)) return null;
-      const clean = raw.replace(/^[\s]+/, "");
-      const name = clean.match(/^([A-Za-z_]\w*)/)?.[1];
+      const name = parseInitializedScalarDeclarator(item);
       return name ? { name, type } : null;
     })
     .filter(Boolean);
