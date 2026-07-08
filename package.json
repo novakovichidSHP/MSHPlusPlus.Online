@@ -11,6 +11,7 @@
     "test": "npm run test:unit && npm run test:unit:coverage",
     "test:unit": "node --test tests/unit/*.test.mjs assets/cpp-runtime/*.test.mjs",
     "test:unit:coverage": "c8 node --test tests/unit/*.test.mjs assets/cpp-runtime/*.test.mjs",
+    "test:smoke": "playwright test -c playwright.smoke.config.cjs",
     "docs:api": "jsdoc -c jsdoc.json",
     "docs:api:check": "node scripts/check-api-docs.mjs /tmp/jsdoc-report.json"
   },
