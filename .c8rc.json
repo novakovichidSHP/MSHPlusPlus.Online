@@ -1,6 +1,7 @@
 {
   "all": false,
   "reporter": ["text", "lcov", "cobertura"],
+  "exclude": ["assets/skulpt-fflate.esm.js", "tests/**", "**/*.test.mjs"],
   "check-coverage": true,
   "statements": 95,
   "lines": 95,

@@ -1,4 +1,4 @@
-import { gzipSync, gunzipSync, unzipSync } from "./skulpt-fflate.esm.js";
+import { gzipSync, Gunzip, Unzip, UnzipInflate } from "./skulpt-fflate.esm.js";
 import { mergeUniqueIds } from "./utils/recent-utils.js";
 import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { dictEncode, dictDecode } from "./utils/share-dict.js";
@@ -7,6 +7,8 @@ import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
 import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=11";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 import { createDebugKey } from "./cpp-runtime/debug-instrumentation.js";
+import { IMPORT_LIMITS, ImportPolicyError, assertInputSize, createArchiveBudget, parseProjectExport, parseShareSnapshot, validatePortableFileName, validatePortableFiles } from "./utils/import-policy.js";
+import { gunzipWithLimit } from "./utils/bounded-gzip.js";
 
 // Движок C++ (emception) — занимает место Skulpt. Инициализируется в initRuntime().
 // baseUrl относителен расположению cpp-runtime.js (assets/cpp-runtime/) → ../../toolchain/
@@ -154,7 +156,11 @@ const state = {
   debugWatch: "",
   outputBytes: 0,
   saveTimer: null,
+  saveTarget: null,
+  savePromise: null,
   draftTimer: null,
+  draftTarget: null,
+  draftPromise: null,
   editorResizeTimer: null,
   editorScrollSyncRaf: null,
   embed: {
@@ -484,6 +490,14 @@ async function init() {
    */
   initRuntime();
   window.addEventListener("hashchange", router);
+  window.addEventListener("pagehide", () => {
+    void flushPendingSaves();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      void flushPendingSaves();
+    }
+  });
   await router();
 }
 
@@ -945,6 +959,10 @@ function showView(view) {
  * @returns {Promise<void>}
  */
 async function router() {
+  // Persist the object captured when editing happened before state is replaced by
+  // another route. pagehide is only a best-effort fallback; in-app navigation
+  // awaits this flush so a fast project switch cannot redirect the save.
+  await flushPendingSaves();
   const { route, id, query } = parseHash();
   if (route === "landing") {
     showView("landing");
@@ -1047,13 +1065,13 @@ async function openProject(projectId) {
   }
   state.project = project;
   state.snapshot = null;
-  state.activeFile = project.lastActiveFile || project.files[0]?.name || null;
   /**
    * Creates a new project with default files and opens it in edit mode.
    * @async
    */
   ensureMainProject();
-  state.activeFile = MAIN_FILE;
+  state.activeFile = resolveLastActiveFile(project.files, project.lastActiveFile, MAIN_FILE);
+  project.lastActiveFile = state.activeFile;
 
   setMode("project");
   renderProject();
@@ -1241,9 +1259,11 @@ async function openSnapshot(shareId, payload) {
     };
 
     state.project = null;
-    state.activeFile = draft.draftLastActiveFile || baseline.lastActiveFile || baseline.files[0]?.name || null;
     ensureMainSnapshot();
-    state.activeFile = MAIN_FILE;
+    const files = getEffectiveFiles();
+    const preferredFile = draft.draftLastActiveFile || baseline.lastActiveFile;
+    state.activeFile = resolveLastActiveFile(files, preferredFile, MAIN_FILE);
+    draft.draftLastActiveFile = state.activeFile;
 
     setMode("snapshot");
     renderSnapshot();
@@ -2056,10 +2076,37 @@ function scheduleSave() {
   }
   updateSaveIndicator("Сохранение...");
   clearTimeout(state.saveTimer);
-  state.saveTimer = setTimeout(async () => {
-    await saveProject(state.project);
-    updateSaveIndicator("Сохранено");
+  state.saveTarget = state.project;
+  state.saveTimer = setTimeout(() => {
+    void flushProjectSave();
   }, 400);
+}
+
+async function flushProjectSave() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
+  const project = state.saveTarget;
+  state.saveTarget = null;
+  if (!project) {
+    await state.savePromise;
+    return;
+  }
+  const previousSave = state.savePromise;
+  const savePromise = (async () => {
+    await previousSave;
+    await saveProject(project);
+  })();
+  state.savePromise = savePromise;
+  try {
+    await savePromise;
+  } finally {
+    if (state.savePromise === savePromise) {
+      state.savePromise = null;
+    }
+  }
+  if (state.mode === "project" && state.project?.projectId === project.projectId) {
+    updateSaveIndicator("Сохранено");
+  }
 }
 
 function scheduleDraftSave() {
@@ -2067,14 +2114,39 @@ function scheduleDraftSave() {
     return;
   }
   clearTimeout(state.draftTimer);
-  state.draftTimer = setTimeout(async () => {
-    if (state.mode !== "snapshot" || !state.snapshot || !state.snapshot.draft) {
-      return;
-    }
-    const draft = state.snapshot.draft;
+  state.draftTarget = state.snapshot?.draft || null;
+  state.draftTimer = setTimeout(() => {
+    void flushDraftSave();
+  }, 400);
+}
+
+async function flushDraftSave() {
+  clearTimeout(state.draftTimer);
+  state.draftTimer = null;
+  const draft = state.draftTarget;
+  state.draftTarget = null;
+  if (!draft) {
+    await state.draftPromise;
+    return;
+  }
+  const previousSave = state.draftPromise;
+  const savePromise = (async () => {
+    await previousSave;
     draft.updatedAt = Date.now();
     await dbPut("drafts", draft);
-  }, 400);
+  })();
+  state.draftPromise = savePromise;
+  try {
+    await savePromise;
+  } finally {
+    if (state.draftPromise === savePromise) {
+      state.draftPromise = null;
+    }
+  }
+}
+
+async function flushPendingSaves() {
+  await Promise.all([flushProjectSave(), flushDraftSave()]);
 }
 
 async function saveProject(project) {
@@ -2418,21 +2490,21 @@ async function buildPayload(payloadBytes) {
 }
 
 async function decodePayload(payload) {
+  if (typeof payload !== "string" || payload.length > Math.ceil(IMPORT_LIMITS.maxInputBytes * 4 / 3) + 8) {
+    throw new ImportPolicyError("input-too-large", "Snapshot payload is too large");
+  }
   const [prefix, data] = payload.split(".");
   const bytes = base64UrlDecode(data || payload);
+  assertInputSize(bytes.length);
   if (prefix === "g" || prefix === "d") {
-    try {
-      const decompressed = await decompressBytes(bytes);
-      const text = decoder.decode(decompressed);
-      return JSON.parse(prefix === "d" ? dictDecode(text) : text);
-    } catch (error) {
-      console.warn("Decompression failed", error);
-    }
+    const decompressed = await decompressBytes(bytes, IMPORT_LIMITS.maxSnapshotJsonBytes);
+    const text = decoder.decode(decompressed);
+    return parseShareSnapshot(prefix === "d" ? dictDecode(text) : text);
   }
   if (prefix === "n") {
-    return JSON.parse(dictDecode(decoder.decode(bytes)));
+    return parseShareSnapshot(dictDecode(decoder.decode(bytes)));
   }
-  return JSON.parse(decoder.decode(bytes));
+  return parseShareSnapshot(decoder.decode(bytes));
 }
 
 async function compressBytes(bytes) {
@@ -2444,13 +2516,32 @@ async function compressBytes(bytes) {
   return gzipSync(bytes);
 }
 
-async function decompressBytes(bytes) {
+async function decompressBytes(bytes, maxOutputBytes) {
   if ("DecompressionStream" in window && typeof Blob !== "undefined" && Blob.prototype && Blob.prototype.stream) {
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    const response = new Response(stream);
-    return new Uint8Array(await response.arrayBuffer());
+    const reader = stream.getReader();
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > maxOutputBytes) {
+        await reader.cancel();
+        throw new ImportPolicyError("snapshot-too-large", "Snapshot expands beyond limit");
+      }
+      chunks.push(value);
+    }
+    return concatByteChunks(chunks, total);
   }
-  return gunzipSync(bytes);
+  return gunzipWithLimit(bytes, maxOutputBytes, Gunzip);
+}
+
+function concatByteChunks(chunks, total) {
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }
+  return output;
 }
 
 async function computeShareId(bytes) {
@@ -2721,7 +2812,13 @@ async function importFiles(files) {
   }
   const imports = [];
   let skipped = 0;
+  let selectedBytes = 0;
   for (const file of files) {
+    selectedBytes += Number(file.size) || 0;
+    try { assertInputSize(selectedBytes); } catch {
+      showToast("Импорт отклонён: выбранные файлы слишком большие.");
+      return;
+    }
     const name = String(file.name || "");
     if (isGeneratedRuntimeArtifactName(name)) {
       skipped += 1;
@@ -2729,6 +2826,7 @@ async function importFiles(files) {
     }
     const lower = name.toLowerCase();
     if (hasSourceExtension(lower)) {
+      if (file.size > IMPORT_LIMITS.maxSingleFileBytes) { skipped += 1; continue; }
       const content = await file.text();
       imports.push({ name, content });
       continue;
@@ -2751,6 +2849,7 @@ async function importFiles(files) {
     }
     // Прочее — файлы-данные (txt/csv/dat/...): читаем как текст для файлового I/O.
     try {
+      if (file.size > IMPORT_LIMITS.maxSingleFileBytes) { skipped += 1; continue; }
       const content = await file.text();
       imports.push({ name, content });
     } catch (error) {
@@ -2761,6 +2860,10 @@ async function importFiles(files) {
     showToast("Не найдено файлов для импорта.");
     return;
   }
+  try { validatePortableFiles(imports); } catch {
+    showToast("Импорт отклонён: превышены лимиты или некорректны файлы.");
+    return;
+  }
   if (skipped) {
     showToast("Некоторые файлы пропущены.");
   }
@@ -2769,58 +2872,48 @@ async function importFiles(files) {
 
 function extractPyFromZip(bytes) {
   const out = [];
-  let entries = {};
+  const budget = createArchiveBudget();
+  let failure = null;
   try {
-    entries = unzipSync(bytes);
+    assertInputSize(bytes.length);
+    const unzip = new Unzip((file) => {
+      if (failure || file.name.endsWith("/")) return;
+      if (!validatePortableFileName(file.name) || isGeneratedRuntimeArtifactName(file.name)) {
+        failure = new ImportPolicyError("invalid-file-name", "Invalid ZIP entry name");
+        return;
+      }
+      const consume = budget.beginFile(file.name, file.originalSize);
+      const chunks = [];
+      let total = 0;
+      file.ondata = (error, data, final) => {
+        if (failure) return;
+        if (error) { failure = error; return; }
+        try { consume(data.length); } catch (limitError) { failure = limitError; file.terminate(); return; }
+        total += data.length;
+        chunks.push(data);
+        if (final) out.push({ name: file.name, content: decoder.decode(concatByteChunks(chunks, total)) });
+      };
+      file.start();
+    });
+    unzip.register(UnzipInflate);
+    unzip.push(bytes, true);
+    if (failure) throw failure;
   } catch (error) {
     console.warn("Zip import failed", error);
-    showToast("Не удалось прочитать ZIP архив.");
-    return out;
-  }
-  for (const [entryName, data] of Object.entries(entries)) {
-    if (!entryName || entryName.endsWith("/")) {
-      continue;
-    }
-    // Исходники И файлы-данные: проект должен полностью round-trip'иться.
-    const base = getBaseName(entryName);
-    if (isGeneratedRuntimeArtifactName(base)) {
-      continue;
-    }
-    const content = decoder.decode(data);
-    out.push({ name: base, content });
+    showToast(error instanceof ImportPolicyError ? "ZIP отклонён: превышены лимиты или некорректны имена." : "Не удалось прочитать ZIP архив.");
+    return [];
   }
   return out;
 }
 
 function extractPyFromJson(text) {
-  let payload = null;
   try {
-    payload = JSON.parse(text);
+    const parsed = parseProjectExport(text);
+    if (parsed.hasAssets) showToast("Ресурсы из JSON сейчас не импортируются.");
+    return parsed.files.filter((file) => !isGeneratedRuntimeArtifactName(file.name));
   } catch (error) {
     return null;
   }
-  if (!payload || payload.version !== 1 || !payload.project || !Array.isArray(payload.project.files)) {
-    return null;
-  }
-  const out = [];
-  let skippedAssets = false;
-  if (Array.isArray(payload.project.assets) && payload.project.assets.length) {
-    skippedAssets = true;
-  }
-  for (const file of payload.project.files) {
-    if (!file || !file.name) {
-      continue;
-    }
-    const name = String(file.name);
-    if (isGeneratedRuntimeArtifactName(name)) {
-      continue;
-    }
-    out.push({ name, content: String(file.content || "") });
-  }
-  if (skippedAssets) {
-    showToast("Ресурсы из JSON сейчас не импортируются.");
-  }
-  return out;
 }
 
 function isNameTaken(name, added) {

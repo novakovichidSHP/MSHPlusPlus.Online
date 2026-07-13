@@ -26,7 +26,13 @@ const DEBUG_PREAMBLE = [
   "[[maybe_unused]] static inline std::string __cpp_debug_value(bool value) { return value ? \"true\" : \"false\"; }",
   "template <typename T> [[maybe_unused]] static inline std::string __cpp_debug_value(T value) { return std::to_string(value); }",
   "#endif",
-  'extern "C" void __cpp_debug_point(int, int, int, const char*);'
+  "#ifndef __CPP_DEBUG_SCOPE_HELPER",
+  "#define __CPP_DEBUG_SCOPE_HELPER",
+  'extern "C" int __cpp_debug_enter();',
+  'extern "C" void __cpp_debug_leave();',
+  'struct __cpp_debug_scope { int frame_id; __cpp_debug_scope(): frame_id(__cpp_debug_enter()) {} ~__cpp_debug_scope() { __cpp_debug_leave(); } };',
+  'extern "C" void __cpp_debug_point(int, int, int, int, const char*);',
+  "#endif"
 ];
 
 export function createDebugKey(file, line) {
@@ -373,7 +379,7 @@ export function buildDebugInstrumentation(files, options = {}) {
     const lexerState = { blockComment: false, rawEnd: null, quote: null };
     const sanitizedLines = lines.map((line) => sanitizeCppLine(line, lexerState));
     const unsafeLines = unsafeHookLines(sanitizedLines);
-    const out = [...DEBUG_PREAMBLE];
+    const out = [...DEBUG_PREAMBLE, `#line 1 "${escapeCppString(file.name)}"`];
     let depth = 0;
     let currentFunction = "<global>";
     const stack = [];
@@ -393,7 +399,9 @@ export function buildDebugInstrumentation(files, options = {}) {
         const fnId = getFunctionId(currentFunction);
         const indent = original.match(/^\s*/)?.[0] || "";
         const visibleVars = scopeVars.flatMap((scope) => scope.vars);
-        out.push(`${indent}{ auto __cpp_debug_vars = ${buildVarsExpression(visibleVars)}; __cpp_debug_point(${fileId}, ${lineNumber}, ${fnId}, __cpp_debug_vars.c_str()); }`);
+        out.push(`#line ${lineNumber} "${escapeCppString(file.name)}"`);
+        out.push(`${indent}{ auto __cpp_debug_vars = ${buildVarsExpression(visibleVars)}; __cpp_debug_point(${fileId}, ${lineNumber}, ${fnId}, __cpp_debug_frame.frame_id, __cpp_debug_vars.c_str()); }`);
+        out.push(`#line ${lineNumber} "${escapeCppString(file.name)}"`);
         points.push({
           id: points.length + 1,
           file: file.name,
@@ -411,6 +419,7 @@ export function buildDebugInstrumentation(files, options = {}) {
       if (entersFunction) {
         stack.push(currentFunction);
         currentFunction = nextFunction;
+        out.push("  __cpp_debug_scope __cpp_debug_frame;");
       }
       const declaredVars = inFunction ? extractDeclaredVariables(trimmed) : [];
       depth += opens - closes;

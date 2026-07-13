@@ -1,6 +1,7 @@
 {
   "name": "mshp-ide",
   "private": true,
+  "type": "module",
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "c8": "^10.1.3",

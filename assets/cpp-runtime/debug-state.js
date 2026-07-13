@@ -16,7 +16,9 @@ export function createDebugSession(debug) {
     resumeMode: startMode === "entry" ? "entry" : "continue",
     startMode,
     skipKey: null,
-    stepTargetFunctionId: null
+    stepTargetFunctionId: null,
+    stepTargetFrameId: null,
+    stepTargetDepth: null
   };
 }
 
@@ -25,12 +27,16 @@ export function applyDebugCommand(session, command) {
   session.paused = false;
   session.skipKey = session.last ? createDebugKey(session.last.file, session.last.line) : null;
   session.stepTargetFunctionId = session.last ? session.last.functionId : null;
+  session.stepTargetFrameId = session.last ? session.last.frameId : null;
+  session.stepTargetDepth = session.last ? session.last.stackDepth : null;
   if (command === "stepOver") session.resumeMode = "stepOver";
   else if (command === "stepInto") session.resumeMode = "stepInto";
   else if (command === "stepOut") session.resumeMode = "stepOut";
   else {
     session.resumeMode = "continue";
     session.stepTargetFunctionId = null;
+    session.stepTargetFrameId = null;
+    session.stepTargetDepth = null;
   }
   return session.resumeMode;
 }
@@ -49,14 +55,23 @@ export function decodeDebugVars(raw) {
   }
 }
 
-export function evaluateDebugPoint(session, fileId, line, functionId, varsJson = "") {
+export function evaluateDebugPoint(session, fileId, line, functionId, frameId = 0, stackDepth = 0, varsJson = "") {
   if (!session) return { pause: false, frame: null, enteredPause: false };
+  // Backward-compatible form used by older callers/tests:
+  // evaluateDebugPoint(session, file, line, function, varsJson)
+  if (typeof frameId === "string") {
+    varsJson = frameId;
+    frameId = 0;
+    stackDepth = 0;
+  }
   const file = session.filesById.get(Number(fileId)) || "<unknown>";
   const fn = session.functionsById.get(Number(functionId)) || "<global>";
   const frame = {
     file,
     line: Number(line),
     functionId: Number(functionId),
+    frameId: Number(frameId),
+    stackDepth: Number(stackDepth),
     functionName: fn,
     variables: decodeDebugVars(varsJson)
   };
@@ -72,13 +87,22 @@ export function evaluateDebugPoint(session, fileId, line, functionId, varsJson =
   let shouldPause = hasBreakpoint;
   if (session.resumeMode === "entry") shouldPause = true;
   else if (session.resumeMode === "stepInto" && !samePoint) shouldPause = true;
-  else if (session.resumeMode === "stepOver" && !samePoint && frame.functionId === session.stepTargetFunctionId) shouldPause = true;
-  else if (session.resumeMode === "stepOut" && last && frame.functionId !== session.stepTargetFunctionId) shouldPause = true;
+  else if (session.resumeMode === "stepOver" && !samePoint) {
+    shouldPause = session.stepTargetDepth > 0
+      ? frame.stackDepth <= session.stepTargetDepth
+      : frame.functionId === session.stepTargetFunctionId;
+  } else if (session.resumeMode === "stepOut" && last) {
+    shouldPause = session.stepTargetDepth > 0
+      ? frame.stackDepth < session.stepTargetDepth
+      : frame.functionId !== session.stepTargetFunctionId;
+  }
 
   session.last = frame;
   if (!shouldPause) return { pause: false, frame, enteredPause: false };
   session.paused = true;
   session.resumeMode = "continue";
   session.stepTargetFunctionId = null;
+  session.stepTargetFrameId = null;
+  session.stepTargetDepth = null;
   return { pause: true, frame, enteredPause: true };
 }

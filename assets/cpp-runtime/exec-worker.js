@@ -27,23 +27,19 @@
 import { applyDebugCommand, createDebugSession, evaluateDebugPoint } from "./debug-state.js";
 import { collectLimitedOutputFiles } from "./output-files-policy.js";
 import { lockDownNetworkCapabilities } from "./security-policy.js";
+import { InputByteQueue } from "./input-byte-queue.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 let started = false;
-let inputBytes = new Uint8Array(0);
-let inputPtr = 0;
+let inputQueue = new InputByteQueue();
 let debugSession = null;
 
 // Добавить порцию пользовательского ввода в буфер (busy-poll в C++ его подхватит).
 function feedInput(text) {
   const add = encoder.encode(String(text ?? ""));
-  if (!add.length) return;
-  const merged = new Uint8Array(inputBytes.length + add.length);
-  merged.set(inputBytes);
-  merged.set(add, inputBytes.length);
-  inputBytes = merged;
+  inputQueue.push(add);
 }
 
 self.onmessage = (event) => {
@@ -79,8 +75,7 @@ async function start({
     self.postMessage({ type: "error", message: "exec-worker: нет moduleJs" });
     return;
   }
-  inputBytes = encoder.encode(typeof stdin === "string" ? stdin : "");
-  inputPtr = 0;
+  inputQueue = new InputByteQueue(encoder.encode(typeof stdin === "string" ? stdin : ""));
   debugSession = createDebugSession(debug);
   const cap = Number.isFinite(maxOutputBytes) ? maxOutputBytes : 2_000_000;
 
@@ -148,7 +143,7 @@ async function start({
   // Когда данных нет — один раз сигналим UI 'need-input' (программа ждёт ввод).
   let needInputPosted = false;
   function inputReady() {
-    if (inputPtr < inputBytes.length) {
+    if (inputQueue.length > 0) {
       needInputPosted = false;
       return 1;
     }
@@ -159,7 +154,7 @@ async function start({
     return 0;
   }
   function getCharSync() {
-    return inputPtr < inputBytes.length ? inputBytes[inputPtr++] : -1;
+    return inputQueue.readByte();
   }
 
   const moduleConfig = {
@@ -186,7 +181,10 @@ async function start({
     print: (s) => emit("stdout", s),
     printErr: (s) => emit("stderr", s),
     // C stdin (scanf/getchar) — батч из того же буфера, без паузы (EOF при пустом).
-    stdin: () => (inputPtr < inputBytes.length ? inputBytes[inputPtr++] : null),
+    stdin: () => {
+      const value = inputQueue.readByte();
+      return value < 0 ? null : value;
+    },
     // std::cin (через async streambuf + emscripten_sleep):
     __inputReady: inputReady,
     __getCharSync: getCharSync,
@@ -197,8 +195,8 @@ async function start({
       if (truncated || !bytes || !bytes.length) return;
       emitRaw("stdout", decoder.decode(bytes, { stream: true }));
     },
-    __debugPoll: (fileId, line, functionId, varsJson) => {
-      const result = evaluateDebugPoint(debugSession, fileId, line, functionId, varsJson);
+    __debugPoll: (fileId, line, functionId, frameId, stackDepth, varsJson) => {
+      const result = evaluateDebugPoint(debugSession, fileId, line, functionId, frameId, stackDepth, varsJson);
       if (result.enteredPause && result.frame) postDebugPaused(result.frame);
       return result.pause ? 1 : 0;
     },

@@ -6,6 +6,7 @@ import { EDITOR_COMMANDS } from "../../assets/editor-core/editor-command-transfo
 function event(overrides = {}) {
   return {
     key: "",
+    code: "",
     ctrlKey: false,
     metaKey: false,
     altKey: false,
@@ -31,6 +32,19 @@ test("maps ControlOrMeta shortcuts", () => {
   assert.equal(resolveEditorShortcut(event({ key: "D", metaKey: true })), EDITOR_COMMANDS.DUPLICATE_LINE);
   assert.equal(resolveEditorShortcut(event({ key: "K", ctrlKey: true, shiftKey: true })), EDITOR_COMMANDS.DELETE_LINE);
   assert.equal(resolveEditorShortcut(event({ key: "l", ctrlKey: true })), EDITOR_COMMANDS.SELECT_LINE);
+});
+
+test("uses physical key codes with non-Latin keyboard layouts", () => {
+  assert.equal(resolveEditorShortcut(event({ key: ".", code: "Slash", altKey: true })), EDITOR_COMMANDS.TOGGLE_COMMENT);
+  assert.equal(resolveEditorShortcut(event({ key: "в", code: "KeyD", ctrlKey: true })), EDITOR_COMMANDS.DUPLICATE_LINE);
+  assert.equal(resolveEditorShortcut(event({ key: "л", code: "KeyK", ctrlKey: true, shiftKey: true })), EDITOR_COMMANDS.DELETE_LINE);
+  assert.equal(resolveEditorShortcut(event({ key: "д", code: "KeyL", ctrlKey: true })), EDITOR_COMMANDS.SELECT_LINE);
+});
+
+test("keeps key fallback for synthetic and assistive events without code", () => {
+  assert.equal(resolveEditorShortcut(event({ key: "/", altKey: true })), EDITOR_COMMANDS.TOGGLE_COMMENT);
+  assert.equal(resolveEditorShortcut(event({ key: "D", metaKey: true })), EDITOR_COMMANDS.DUPLICATE_LINE);
+  assert.equal(resolveEditorShortcut(event({ key: "l", code: "Unidentified", ctrlKey: true })), EDITOR_COMMANDS.SELECT_LINE);
 });
 
 test("ignores unsupported combinations", () => {

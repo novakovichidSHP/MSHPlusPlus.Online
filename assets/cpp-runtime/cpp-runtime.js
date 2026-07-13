@@ -139,20 +139,25 @@ const CPPIO_LIB_NAME = "__cppio_lib.js";
 const DEBUG_SOURCE_NAME = "__debug_runtime.cpp";
 const DEBUG_LIB_NAME = "__debug_runtime_lib.js";
 const DEBUG_RUNTIME_SRC = `#include <emscripten.h>
-extern "C" int __cpp_debug_poll(int fileId, int line, int functionId, const char* varsJson);
-extern "C" void __cpp_debug_point(int fileId, int line, int functionId, const char* varsJson) {
-  while (__cpp_debug_poll(fileId, line, functionId, varsJson)) {
+static int __cpp_debug_depth = 0;
+static int __cpp_debug_next_frame = 0;
+extern "C" int __cpp_debug_enter() { ++__cpp_debug_depth; return ++__cpp_debug_next_frame; }
+extern "C" void __cpp_debug_leave() { --__cpp_debug_depth; }
+extern "C" int __cpp_debug_stack_depth() { return __cpp_debug_depth; }
+extern "C" int __cpp_debug_poll(int fileId, int line, int functionId, int frameId, int stackDepth, const char* varsJson);
+extern "C" void __cpp_debug_point(int fileId, int line, int functionId, int frameId, const char* varsJson) {
+  while (__cpp_debug_poll(fileId, line, functionId, frameId, __cpp_debug_stack_depth(), varsJson)) {
     emscripten_sleep(15);
   }
 }
 `;
 const DEBUG_RUNTIME_LIB = `mergeInto(LibraryManager.library, {
-  __cpp_debug_poll: function (fileId, line, functionId, varsPtr) {
+  __cpp_debug_poll: function (fileId, line, functionId, frameId, stackDepth, varsPtr) {
     var varsJson = "";
     if (varsPtr) {
       try { varsJson = UTF8ToString(varsPtr); } catch (e) { varsJson = ""; }
     }
-    return Module.__debugPoll ? Module.__debugPoll(fileId, line, functionId, varsJson) : 0;
+    return Module.__debugPoll ? Module.__debugPoll(fileId, line, functionId, frameId, stackDepth, varsJson) : 0;
   }
 });
 `;
@@ -881,12 +886,20 @@ class CppRuntime {
       // Таймаут считает ТОЛЬКО время выполнения. Пока программа висит на std::cin
       // (need-input), часы остановлены — иначе живой ввод убивался бы лимитом.
       let timer = null;
+      let activeSince = null;
+      let remainingMs = Math.max(0, timeoutMs);
       const armTimer = () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+        if (timer || settled) return;
+        activeSince = _now();
+        timer = setTimeout(() => finish({ timedOut: true }), remainingMs);
       };
       const stopTimer = () => {
-        if (timer) { clearTimeout(timer); timer = null; }
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+          remainingMs = Math.max(0, remainingMs - (_now() - activeSince));
+          activeSince = null;
+        }
       };
 
       const finish = (extra) => {
@@ -926,11 +939,9 @@ class CppRuntime {
             });
             break;
           case "stdout":
-            armTimer(); // программа активна — перезапускаем счётчик выполнения
             opts.onStdout && opts.onStdout(m.chunk);
             break;
           case "stderr":
-            armTimer();
             opts.onStderr && opts.onStderr(m.chunk);
             break;
           case "need-input":

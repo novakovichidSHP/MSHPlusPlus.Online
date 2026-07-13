@@ -33,9 +33,35 @@ jobs:
         with:
           file: coverage/lcov.info
 
+  smoke:
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with C++ toolchain
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests
+        run: npm run test:smoke
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
   docs:
     if: "${{ github.event_name == 'push' && !contains(github.event.head_commit.message, 'docs: auto-update API docs') }}"
-    needs: unit
+    needs: [unit, smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write

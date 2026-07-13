@@ -95,6 +95,14 @@ test("buildDebugInstrumentation handles chars, floats and multiple declarators",
   assert.match(code, /__cpp_debug_value\(b\)/);
 });
 
+test("instrumentation restores compiler source lines and tracks invocation frames", () => {
+  const result = buildDebugInstrumentation([{ name: "main.cpp", content: "int f(int n) {\n  return n;\n}\n" }]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_scope __cpp_debug_frame;/);
+  assert.match(code, /#line 2 "main\.cpp"/);
+  assert.match(code, /__cpp_debug_point\(1, 2, \d+, __cpp_debug_frame\.frame_id,/);
+});
+
 test("buildDebugInstrumentation skips uninitialized scalars and arrays in declarations", () => {
   const result = buildDebugInstrumentation([
     {

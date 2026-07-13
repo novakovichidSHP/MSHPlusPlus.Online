@@ -52,3 +52,12 @@ test("resolveLastActiveFile falls back to first file or mainFile for empty list"
   assert.equal(resolveLastActiveFile(files, "missing.py", "main.py"), "utils.py");
   assert.equal(resolveLastActiveFile([], "missing.py", "main.py"), "main.py");
 });
+
+test("resolveLastActiveFile restores a valid C++ project tab", () => {
+  const files = [
+    { name: "main.cpp", content: "" },
+    { name: "solution.cpp", content: "" }
+  ];
+  assert.equal(resolveLastActiveFile(files, "solution.cpp", "main.cpp"), "solution.cpp");
+  assert.equal(resolveLastActiveFile(files, "deleted.cpp", "main.cpp"), "main.cpp");
+});

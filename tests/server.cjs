@@ -1,7 +1,6 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const url = require("url");
 
 const rootDir = path.resolve(__dirname, "..");
 const port = Number(process.env.PORT || 4173);
@@ -33,18 +32,29 @@ function send(res, statusCode, body, headers = {}) {
 }
 
 function safePath(requestPath) {
-  const decoded = decodeURIComponent(requestPath);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(requestPath);
+  } catch {
+    return null;
+  }
   const normalized = path.normalize(decoded).replace(/^([/\\])+/, "");
   const resolved = path.resolve(rootDir, normalized);
-  if (!resolved.startsWith(rootDir)) {
+  const relative = path.relative(rootDir, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     return null;
   }
   return resolved;
 }
 
 const server = http.createServer((req, res) => {
-  const parsed = url.parse(req.url);
-  const pathname = parsed.pathname || "/";
+  let pathname;
+  try {
+    pathname = new URL(req.url || "/", "http://127.0.0.1").pathname;
+  } catch {
+    send(res, 400, "Bad Request");
+    return;
+  }
   const target = pathname === "/" ? "/index.html" : pathname;
   const filePath = safePath(target);
   if (!filePath) {

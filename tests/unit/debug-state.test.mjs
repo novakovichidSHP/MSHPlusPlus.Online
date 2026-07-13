@@ -82,6 +82,26 @@ test("stepOut pauses after returning to a different function", () => {
   assert.equal(evaluateDebugPoint(session, 1, 6, 1).pause, true);
 });
 
+test("stepOver does not stop in a recursive child frame", () => {
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
+  assert.equal(evaluateDebugPoint(session, 1, 3, 2, 10, 2).pause, true);
+  applyDebugCommand(session, "stepOver");
+  assert.equal(evaluateDebugPoint(session, 1, 3, 2, 11, 3).pause, false);
+  assert.equal(evaluateDebugPoint(session, 1, 4, 2, 11, 3).pause, false);
+  assert.equal(evaluateDebugPoint(session, 1, 5, 2, 10, 2).pause, true);
+});
+
+test("stepOut waits until recursion returns to the parent depth", () => {
+  const session = createDebugSession({ map: debugMap, breakpoints: [], startMode: "entry" });
+  assert.equal(evaluateDebugPoint(session, 1, 3, 2, 11, 3).pause, true);
+  applyDebugCommand(session, "stepOut");
+  assert.equal(evaluateDebugPoint(session, 1, 4, 2, 11, 3).pause, false);
+  const result = evaluateDebugPoint(session, 1, 5, 2, 10, 2);
+  assert.equal(result.pause, true);
+  assert.equal(result.frame.frameId, 10);
+  assert.equal(result.frame.stackDepth, 2);
+});
+
 test("decodeDebugVars returns stable name/value pairs", () => {
   assert.deepEqual(decodeDebugVars('{"a":1,"name":"Ann"}'), [
     { name: "a", value: "1" },
