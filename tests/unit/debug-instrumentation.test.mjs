@@ -142,3 +142,122 @@ test("buildDebugInstrumentation ignores unsupported declarations safely", () => 
   assert.doesNotMatch(code, /__cpp_debug_value\(ptr\)/);
   assert.doesNotMatch(code, /__cpp_debug_value\(x\)/);
 });
+
+test("buildDebugInstrumentation preserves unbraced if/else semantics", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int choose(int x) {\n  if (x)\n    return 1;\n  else\n    return 2;\n}\nint main() {\n  return choose(0);\n}\n"
+  }]);
+  const code = result.files[0].content;
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 3,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 4,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 5,/);
+  assert.match(code, /if \(x\)\n    return 1;\n  else\n    return 2;/);
+});
+
+test("buildDebugInstrumentation preserves nested unbraced control flow", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int main() {\n  int n = 2;\n  for (int i = 0; i < n; ++i)\n    if (i)\n      n += i;\n    else\n      n -= 1;\n  while (n < 3)\n    ++n;\n  return n;\n}\n"
+  }]);
+  const code = result.files[0].content;
+  for (const line of [4, 5, 6, 7, 9]) {
+    assert.doesNotMatch(code, new RegExp(`__cpp_debug_point\\(1, ${line},`));
+  }
+  assert.match(code, /__cpp_debug_point\(1, 10,/);
+});
+
+test("buildDebugInstrumentation ignores braces and comment markers in quoted literals", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "#include <string>\nint main() {\n  std::string open = \"{ // not a comment\";\n  std::string close = \"} /* not a comment */\";\n  char left = '{';\n  char slash = '/';\n  return 0;\n}\nint global = 1;\n"
+  }]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_point\(1, 7,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 9,/);
+  assert.match(code, /\nint global = 1;\n/);
+});
+
+test("buildDebugInstrumentation ignores braces in line, block and raw-string comments/content", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "#include <string>\nint main() {\n  // } { braces in a line comment\n  /* } comment across\n     lines { */\n  std::string raw = R\"tag({ // raw } /* text */)tag\";\n  return 0;\n}\nint global = 1;\n"
+  }]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_point\(1, 7,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 9,/);
+  assert.match(code, /\nint global = 1;\n/);
+});
+
+test("buildDebugInstrumentation ignores braces in escaped-newline string literals", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "#include <string>\nint main() {\n  std::string text = \"continued \\\n} still text\";\n  return 0;\n}\nint global = 1;\n"
+  }]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_point\(1, 5,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 7,/);
+  assert.match(code, /\nint global = 1;\n/);
+});
+
+test("buildDebugInstrumentation does not insert a hook between do and while", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int main() {\n  int n = 0;\n  do\n    ++n;\n  while (n < 2);\n  return n;\n}\n"
+  }]);
+  const code = result.files[0].content;
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 4,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 5,/);
+  assert.match(code, /__cpp_debug_point\(1, 6,/);
+});
+
+test("buildDebugInstrumentation preserves an unbraced nested do-while statement", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int main() {\n  int n = 0;\n  if (n == 0)\n    do\n      ++n;\n    while (n < 2);\n  return n;\n}\n"
+  }]);
+  const code = result.files[0].content;
+  for (const line of [4, 5, 6]) {
+    assert.doesNotMatch(code, new RegExp(`__cpp_debug_point\\(1, ${line},`));
+  }
+  assert.match(code, /__cpp_debug_point\(1, 7,/);
+});
+
+test("buildDebugInstrumentation keeps compound expressions inside an unbraced body intact", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int main() {\n  bool run = true;\n  if (run)\n    [run] { return run ? 1 : 0; }();\n  return 0;\n}\n"
+  }]);
+  const code = result.files[0].content;
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 4,/);
+  assert.match(code, /\[run\] \{ return run \? 1 : 0; \}\(\);/);
+  assert.match(code, /__cpp_debug_point\(1, 5,/);
+});
+
+test("buildDebugInstrumentation preserves separate braced else, catch and unbraced switch bodies", () => {
+  const result = buildDebugInstrumentation([{
+    name: "main.cpp",
+    content: "int main() {\n  int n = 1;\n  if (n) {\n    ++n;\n  }\n  else {\n    --n;\n  }\n  try {\n    switch (n)\n      return n;\n  }\n  catch (...) {\n    return -1;\n  }\n}\n"
+  }]);
+  const code = result.files[0].content;
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 6,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 11,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 13,/);
+  assert.match(code, /__cpp_debug_point\(1, 14,/);
+});
+
+test("buildDebugInstrumentation lexes escapes while continuing a quoted literal", () => {
+  const content = String.raw`#include <string>
+int main() {
+  std::string text = "continued \
+and \"quoted\" with } and // text";
+  return 0;
+}
+int global = 1;
+`;
+  const result = buildDebugInstrumentation([{ name: "main.cpp", content }]);
+  const code = result.files[0].content;
+  assert.match(code, /__cpp_debug_point\(1, 5,/);
+  assert.doesNotMatch(code, /__cpp_debug_point\(1, 7,/);
+  assert.match(code, /\nint global = 1;\n/);
+});

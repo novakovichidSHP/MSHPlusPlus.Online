@@ -1,11 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 const DEBUG_ARRAYS_CODE = `#include <iostream>
+#include <string>
 using namespace std;
 int main() {
   int a, b, c[1000] = {};
+  string markers = "{ // not syntax }";
   cin >> a >> b;
-  cout << a + b << " " << c[0];
+  int choice = 0;
+  if (a < 0)
+    choice = 1;
+  else
+    choice = 2;
+  cout << choice << " " << markers.front() << " " << a + b << " " << c[0];
 }
 `;
 
@@ -54,7 +61,7 @@ for (const theme of ["light", "dark"]) {
     await page.locator("#debug-step-start-btn").click();
     await expect(page.locator("#run-status")).toHaveAttribute("data-state", "debugpaused", { timeout: 120000 });
     await expect(page.locator("#debug-status")).toHaveText("paused");
-    await expect(page.locator("#debug-frame")).toContainText("main.cpp:4");
+    await expect(page.locator("#debug-frame")).toContainText("main.cpp:5");
 
     await page.locator("#debug-continue-btn").click();
     await page.locator("#console-input").fill("2 3");
@@ -62,7 +69,7 @@ for (const theme of ["light", "dark"]) {
 
     await expect(page.locator("#run-status")).toHaveAttribute("data-state", "debugdone", { timeout: 120000 });
     await expect(page.locator("#debug-status")).toHaveText("idle");
-    await expect.poll(() => consoleText(page)).toContain("5 0");
+    await expect.poll(() => consoleText(page)).toContain("2 { 5 0");
     await expect.poll(() => consoleText(page)).not.toContain("error:");
   });
 }

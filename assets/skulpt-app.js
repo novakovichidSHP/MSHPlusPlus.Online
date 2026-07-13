@@ -4,7 +4,7 @@ import { getBaseName, createNumberedImportName } from "./utils/import-utils.js";
 import { dictEncode, dictDecode } from "./utils/share-dict.js";
 import { cloneFilesForProject, resolveLastActiveFile } from "./utils/remix-utils.js";
 import { createCm6EditorAdapter } from "./editor-core/cm6-editor-adapter.js";
-import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=10";
+import { createCppRuntime } from "./cpp-runtime/cpp-runtime.js?v=11";
 import { lineColToOffset } from "./cpp-runtime/source-position.js";
 import { createDebugKey } from "./cpp-runtime/debug-instrumentation.js";
 

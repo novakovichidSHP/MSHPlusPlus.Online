@@ -19,6 +19,8 @@
 import * as Comlink from "./vendor/comlink.min.mjs";
 import { parseDiagnostics, summarizeDiagnostics } from "./diagnostics.js";
 import { buildDebugInstrumentation, createDebugKey } from "./debug-instrumentation.js";
+import { findForbiddenJs, inspectGeneratedModuleSecurity } from "./security-policy.js";
+import { discardCompilerWorker } from "./compiler-lifecycle.js";
 
 export const DEFAULTS = {
   // Каталог с артефактами emception (worker, wasm, sysroot). Same-origin!
@@ -41,6 +43,10 @@ export const DEFAULTS = {
     "-sEXPORT_NAME=createCppModule",
     "-sEXIT_RUNTIME=1",
     "-sASYNCIFY=1",
+    // Defense in depth: emitted runtime must not use eval/new Function. The
+    // facade still evaluates the trusted compiler artifact once in exec-worker,
+    // but user C++ cannot invoke Emscripten's dynamic-JS helpers afterwards.
+    "-sDYNAMIC_EXECUTION=0",
     // Как в настоящем компиляторе (clang++/MSVC): программа без функции main()
     // ДОЛЖНА падать на этапе компоновки. По умолчанию emscripten подставляет
     // фиктивный main-заглушку (IGNORE_MISSING_MAIN=1) и «успешно» линкует пустой
@@ -70,30 +76,6 @@ const SOURCE_RE = /\.(cpp|cc|cxx|c\+\+|c)$/i;
 // но и заголовки проекта — иначе std::format, употреблённый в .h, детект бы
 // пропустил, и шим не подключился → ложная ошибка «no member format in std».
 const SCAN_RE = /\.(cpp|cc|cxx|c\+\+|c|h|hpp|hxx|hh|h\+\+|ipp|tcc|inl)$/i;
-
-// Вызовы, исполняющие ПРОИЗВОЛЬНЫЙ JavaScript из C++ (emscripten). В обычном C++
-// их нет; в браузерной песочнице они позволяют коду проекта выполнить любой JS
-// (fetch/эксфильтрация) в origin пользователя — опасно для импортированных/чужих
-// проектов. Блокируем на этапе компиляции. `\s*\(` — чтобы реагировать на вызов,
-// а не на упоминание в комментарии/строке (снижаем ложные срабатывания).
-const FORBIDDEN_JS_RE =
-  /\b(EM_ASM(?:_INT|_DOUBLE|_PTR|_ARGS)?|MAIN_THREAD_EM_ASM(?:_INT|_DOUBLE)?|emscripten_run_script(?:_int|_string)?|emscripten_async_run_script)\s*\(/;
-
-/**
- * Ищет первый запрещённый JS-вызов в исходниках/заголовках проекта.
- * @returns {{name:string,line:number,col:number,api:string}|null}
- */
-function findForbiddenJs(files) {
-  for (const f of files || []) {
-    if (!f || !SCAN_RE.test(f.name)) continue;
-    const lines = String(f.content ?? "").split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const m = FORBIDDEN_JS_RE.exec(lines[i]);
-      if (m) return { name: f.name, line: i + 1, col: m.index + 1, api: m[1] };
-    }
-  }
-  return null;
-}
 
 // --- Интерактивный ввод std::cin (Asyncify) ---
 // Доп. единица трансляции: подменяет буфер std::cin на async-streambuf ДО main
@@ -595,6 +577,7 @@ class CppRuntime {
     this._viewsWritten = false;  // шим std::views уже в ФС воркера?
     this._debugMap = null;
     this._debugBreakpoints = new Set();
+    this._compileActive = false;
   }
 
   get ready() {
@@ -608,6 +591,7 @@ class CppRuntime {
   init(onProgress) {
     if (this._initPromise) return this._initPromise;
     this._initPromise = this._doInit(onProgress).catch((err) => {
+      this._discardCompilerWorker();
       this._initPromise = null; // дать шанс повторить
       throw err;
     });
@@ -657,14 +641,13 @@ class CppRuntime {
 
     // Backstop-таймаут: тулчейн весит десятки МБ, но если за initTimeoutMs
     // ничего не пришло — тоже показываем ошибку, а не бесконечную загрузку.
-    const timeout = new Promise((_, reject) => {
-      setTimeout(() => reject(new CppRuntimeError(
-        "Таймаут загрузки компилятора. Проверьте доступность тулчейна и сеть.",
-        "TOOLCHAIN_TIMEOUT"
-      )), this.options.initTimeoutMs);
-    });
-
-    return Promise.race([sequence, workerFailed, timeout]);
+    return this._withTimeout(
+      Promise.race([sequence, workerFailed]),
+      this.options.initTimeoutMs,
+      "TOOLCHAIN_TIMEOUT",
+      "Таймаут загрузки компилятора. Проверьте доступность тулчейна и сеть.",
+      () => this._discardCompilerWorker()
+    );
   }
 
   /**
@@ -676,6 +659,18 @@ class CppRuntime {
    * @returns {Promise<{ok:boolean, diagnostics:object, durationMs:number, summary:string}>}
    */
   async compile(files, opts = {}) {
+    if (this._compileActive) {
+      throw new CppRuntimeError("Компиляция уже выполняется", "COMPILE_IN_PROGRESS");
+    }
+    this._compileActive = true;
+    try {
+      return await this._compileImpl(files, opts);
+    } finally {
+      this._compileActive = false;
+    }
+  }
+
+  async _compileImpl(files, opts = {}) {
     if (!this._emception) await this.init();
     this._validateFiles(files);
     const debugEnabled = Boolean(opts.debug);
@@ -777,7 +772,14 @@ class CppRuntime {
         this._emception.run(cmd),
         this.options.compileTimeoutMs,
         "COMPILE_TIMEOUT",
-        "Превышен таймаут компиляции"
+        "Превышен таймаут компиляции",
+        () => {
+          // Promise.race alone leaves clang running against shared diagnostics
+          // and out.js. Terminating the worker is the only hard cancellation
+          // primitive supplied by emception; the next compile will re-init it.
+          this._lastModuleJs = null;
+          this._discardCompilerWorker();
+        }
       );
     } finally {
       this._collecting = false;
@@ -792,12 +794,30 @@ class CppRuntime {
       // такие файлы могут давать свои предупреждения, засоряя консоль.
       internalFiles: [CPPIO_SOURCE_NAME, DEBUG_SOURCE_NAME, FMT_SHIM_NAME, RANGES_SHIM_NAME, VIEWS_SHIM_NAME, ...FMT_HEADER_NAMES]
     });
-    const ok = result && result.returncode === 0;
+    let ok = Boolean(result && result.returncode === 0);
 
     if (ok) {
-      this._lastModuleJs = await this._emception.fileSystem.readFile(`${dir}/out.js`, {
+      const candidateModuleJs = await this._emception.fileSystem.readFile(`${dir}/out.js`, {
         encoding: "utf8"
       });
+      const security = inspectGeneratedModuleSecurity(candidateModuleJs);
+      if (!security.ok) {
+        const item = {
+          file: opts.entry || this.options.entry,
+          line: 1,
+          col: 1,
+          severity: "error",
+          message: `сборка отклонена: generated module содержит запрещённый JavaScript bridge (${security.api})`,
+          raw: security.api
+        };
+        diagnostics.items.push(item);
+        diagnostics.counts.error += 1;
+        diagnostics.firstError ||= item;
+        this._lastModuleJs = null;
+        ok = false;
+      } else {
+        this._lastModuleJs = candidateModuleJs;
+      }
     } else {
       this._lastModuleJs = null;
     }
@@ -827,6 +847,7 @@ class CppRuntime {
    * @param {()=>void} [opts.onNeedInput]        — программа ждёт ввод (std::cin).
    * @returns {Promise<{exitCode:number|null, timedOut:boolean, cancelled:boolean,
    *                    truncated:boolean, outputFiles:Array<{name:string,content:string}>,
+   *                    outputFilesLimited:boolean, outputFilesLimitDetails:Array,
    *                    durationMs:number, error?:string}>}
    */
   run(opts = {}) {
@@ -846,13 +867,15 @@ class CppRuntime {
       : null;
 
     return new Promise((resolve) => {
-      const worker = new Worker(new URL("./exec-worker.js?b=19", import.meta.url), { type: "module" });
+      const worker = new Worker(new URL("./exec-worker.js?b=20", import.meta.url), { type: "module" });
       this._execWorker = worker;
 
       let exitCode = null;
       let truncated = false;
       let settled = false;
       let outputFiles = [];
+      let outputFilesLimited = false;
+      let outputFilesLimitDetails = [];
       const t0 = _now();
 
       // Таймаут считает ТОЛЬКО время выполнения. Пока программа висит на std::cin
@@ -878,6 +901,8 @@ class CppRuntime {
           cancelled: false,
           truncated,
           outputFiles,
+          outputFilesLimited,
+          outputFilesLimitDetails,
           durationMs: _now() - t0,
           ...extra
         });
@@ -894,6 +919,9 @@ class CppRuntime {
               stdin: opts.stdin || "",
               files: Array.isArray(opts.files) ? opts.files : [],
               maxOutputBytes: this.options.maxOutputBytes,
+              maxFiles: this.options.maxFiles,
+              maxSingleFileBytes: this.options.maxSingleFileBytes,
+              maxTotalTextBytes: this.options.maxTotalTextBytes,
               debug
             });
             break;
@@ -921,6 +949,11 @@ class CppRuntime {
           case "output-files":
             // файлы, созданные/изменённые программой в /work (файловый вывод)
             if (Array.isArray(m.files)) outputFiles = m.files;
+            break;
+          case "output-files-limited":
+            outputFilesLimited = true;
+            outputFilesLimitDetails = Array.isArray(m.omitted) ? m.omitted : [];
+            if (m.message && opts.onStderr) opts.onStderr(`${m.message}\n`);
             break;
           case "truncated":
             truncated = true;
@@ -992,12 +1025,8 @@ class CppRuntime {
   /** Полностью освобождает ресурсы (compiler + exec worker). */
   dispose() {
     this.cancelRun();
-    if (this._worker) {
-      this._worker.terminate();
-      this._worker = null;
-      this._emception = null;
-      this._initPromise = null;
-    }
+    this._discardCompilerWorker();
+    this._initPromise = null;
   }
 
   /**
@@ -1065,10 +1094,18 @@ class CppRuntime {
     }
   }
 
-  _withTimeout(promise, ms, code, message) {
+  _discardCompilerWorker() {
+    discardCompilerWorker(this);
+  }
+
+  _withTimeout(promise, ms, code, message, onTimeout) {
     let timer;
     const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new CppRuntimeError(message, code)), ms);
+      timer = setTimeout(() => {
+        try { if (onTimeout) onTimeout(); } finally {
+          reject(new CppRuntimeError(message, code));
+        }
+      }, ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }

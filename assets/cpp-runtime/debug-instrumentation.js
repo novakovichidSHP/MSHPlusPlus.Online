@@ -33,9 +33,205 @@ export function createDebugKey(file, line) {
   return `${file}:${line}`;
 }
 
-function stripLineComment(line) {
-  const idx = line.indexOf("//");
-  return idx === -1 ? line : line.slice(0, idx);
+function sanitizeCppLine(line, state) {
+  const source = String(line || "");
+  let out = "";
+  let i = 0;
+  while (i < source.length) {
+    if (state.quote) {
+      let escaped = false;
+      while (i < source.length) {
+        const current = source[i];
+        out += " ";
+        i += 1;
+        if (escaped) escaped = false;
+        else if (current === "\\") escaped = true;
+        else if (current === state.quote) {
+          state.quote = null;
+          break;
+        }
+      }
+      if (state.quote && !escaped) state.quote = null; // invalid unterminated literal
+      continue;
+    }
+    if (state.rawEnd) {
+      const end = source.indexOf(state.rawEnd, i);
+      if (end === -1) return out + " ".repeat(source.length - i);
+      out += " ".repeat(end + state.rawEnd.length - i);
+      i = end + state.rawEnd.length;
+      state.rawEnd = null;
+      continue;
+    }
+    if (state.blockComment) {
+      const end = source.indexOf("*/", i);
+      if (end === -1) return out + " ".repeat(source.length - i);
+      out += " ".repeat(end + 2 - i);
+      i = end + 2;
+      state.blockComment = false;
+      continue;
+    }
+
+    const ch = source[i];
+    const next = source[i + 1];
+    if (ch === "/" && next === "/") {
+      return out + " ".repeat(source.length - i);
+    }
+    if (ch === "/" && next === "*") {
+      out += "  ";
+      i += 2;
+      state.blockComment = true;
+      continue;
+    }
+
+    // C++ raw string: R"tag(contents)tag" (including u8R/uR/UR/LR prefixes,
+    // because scanning starts at the R itself). The delimiter cannot contain
+    // whitespace, parentheses or backslashes and is at most 16 characters.
+    if (ch === "R" && next === '"') {
+      const open = source.indexOf("(", i + 2);
+      if (open !== -1) {
+        const delimiter = source.slice(i + 2, open);
+        if (delimiter.length <= 16 && !/[\s()\\]/.test(delimiter)) {
+          state.rawEnd = `)${delimiter}"`;
+          out += "0" + " ".repeat(open - i);
+          i = open + 1;
+          continue;
+        }
+      }
+    }
+
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      // Keep a harmless placeholder so declaration parsing still recognizes
+      // direct initialization such as `std::string name("Ann")`.
+      out += "0";
+      i += 1;
+      let escaped = false;
+      while (i < source.length) {
+        const current = source[i];
+        out += " ";
+        i += 1;
+        if (escaped) {
+          escaped = false;
+        } else if (current === "\\") {
+          escaped = true;
+        } else if (current === quote) {
+          break;
+        }
+      }
+      if (escaped) state.quote = quote; // escaped newline continues the literal
+      continue;
+    }
+
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+function tokenizeCpp(lines) {
+  const tokens = [];
+  const tokenRe = /[A-Za-z_]\w*|[{}()[\];]/g;
+  lines.forEach((line, index) => {
+    tokenRe.lastIndex = 0;
+    let match;
+    while ((match = tokenRe.exec(line))) {
+      tokens.push({ value: match[0], line: index + 1 });
+    }
+  });
+  return tokens;
+}
+
+function matchingToken(tokens, start, open, close) {
+  if (tokens[start]?.value !== open) return start;
+  let depth = 0;
+  for (let i = start; i < tokens.length; i += 1) {
+    if (tokens[i].value === open) depth += 1;
+    else if (tokens[i].value === close && --depth === 0) return i;
+  }
+  return tokens.length - 1;
+}
+
+function statementEnd(tokens, start) {
+  if (start >= tokens.length) return start;
+  const value = tokens[start].value;
+  if (value === "{") return matchingToken(tokens, start, "{", "}") + 1;
+
+  if (["if", "for", "while", "switch", "catch"].includes(value)) {
+    const open = tokens.findIndex((token, index) => index > start && token.value === "(");
+    if (open === -1) return start + 1;
+    const bodyStart = matchingToken(tokens, open, "(", ")") + 1;
+    let end = statementEnd(tokens, bodyStart);
+    if (value === "if" && tokens[end]?.value === "else") {
+      end = statementEnd(tokens, end + 1);
+    }
+    return end;
+  }
+
+  if (value === "do") {
+    let end = statementEnd(tokens, start + 1);
+    if (tokens[end]?.value === "while") {
+      const open = end + 1;
+      end = matchingToken(tokens, open, "(", ")") + 1;
+      if (tokens[end]?.value === ";") end += 1;
+    }
+    return end;
+  }
+
+  let parens = 0;
+  let brackets = 0;
+  for (let i = start; i < tokens.length; i += 1) {
+    const token = tokens[i].value;
+    if (token === "(") parens += 1;
+    else if (token === ")") parens = Math.max(0, parens - 1);
+    else if (token === "[") brackets += 1;
+    else if (token === "]") brackets = Math.max(0, brackets - 1);
+    else if (token === "{" && parens === 0 && brackets === 0) {
+      i = matchingToken(tokens, i, "{", "}");
+    } else if (token === ";" && parens === 0 && brackets === 0) {
+      return i + 1;
+    } else if (token === "}" && parens === 0 && brackets === 0) {
+      return i;
+    }
+  }
+  return tokens.length;
+}
+
+function unsafeHookLines(lines) {
+  const tokens = tokenizeCpp(lines);
+  const unsafe = new Set();
+  const markRange = (start, end) => {
+    if (start >= tokens.length || end <= start) return;
+    for (let line = tokens[start].line; line <= tokens[end - 1].line; line += 1) unsafe.add(line);
+  };
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const value = tokens[i].value;
+    if (["if", "for", "while", "switch", "catch"].includes(value)) {
+      if (value === "catch") unsafe.add(tokens[i].line); // keep `try` adjacent to its handler
+      const open = tokens.findIndex((token, index) => index > i && token.value === "(");
+      if (open === -1) continue;
+      const bodyStart = matchingToken(tokens, open, "(", ")") + 1;
+      const bodyEnd = statementEnd(tokens, bodyStart);
+      if (tokens[bodyStart]?.value !== "{") markRange(bodyStart, bodyEnd);
+      if (value === "if" && tokens[bodyEnd]?.value === "else") {
+        unsafe.add(tokens[bodyEnd].line); // hook between `if` and `else` is invalid
+        const elseStart = bodyEnd + 1;
+        const elseEnd = statementEnd(tokens, elseStart);
+        if (tokens[elseStart]?.value !== "{") markRange(elseStart, elseEnd);
+      }
+    } else if (value === "do") {
+      const bodyStart = i + 1;
+      const bodyEnd = statementEnd(tokens, bodyStart);
+      if (tokens[bodyStart]?.value !== "{") markRange(bodyStart, bodyEnd);
+      if (tokens[bodyEnd]?.value === "while") {
+        const trailerEnd = statementEnd(tokens, bodyEnd);
+        markRange(bodyEnd, trailerEnd);
+      }
+    } else if (value === "else") {
+      unsafe.add(tokens[i].line);
+    }
+  }
+  return unsafe;
 }
 
 function countChar(text, ch) {
@@ -174,6 +370,9 @@ export function buildDebugInstrumentation(files, options = {}) {
     }
     const fileId = fileIds.get(file.name);
     const lines = String(file.content || "").split(/\r?\n/);
+    const lexerState = { blockComment: false, rawEnd: null, quote: null };
+    const sanitizedLines = lines.map((line) => sanitizeCppLine(line, lexerState));
+    const unsafeLines = unsafeHookLines(sanitizedLines);
     const out = [...DEBUG_PREAMBLE];
     let depth = 0;
     let currentFunction = "<global>";
@@ -182,7 +381,7 @@ export function buildDebugInstrumentation(files, options = {}) {
 
     for (let i = 0; i < lines.length; i += 1) {
       const original = lines[i];
-      const code = stripLineComment(original);
+      const code = sanitizedLines[i];
       const trimmed = code.trim();
       const lineNumber = i + 1;
       const nextFunction = detectFunctionName(trimmed, currentFunction);
@@ -190,7 +389,7 @@ export function buildDebugInstrumentation(files, options = {}) {
       const closes = countChar(code, "}");
       const inFunction = depth > 0 || (opens > closes && nextFunction !== currentFunction);
 
-      if (inFunction && isHookCandidate(trimmed)) {
+      if (inFunction && !unsafeLines.has(lineNumber) && isHookCandidate(trimmed)) {
         const fnId = getFunctionId(currentFunction);
         const indent = original.match(/^\s*/)?.[0] || "";
         const visibleVars = scopeVars.flatMap((scope) => scope.vars);

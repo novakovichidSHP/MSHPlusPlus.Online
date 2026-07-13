@@ -116,10 +116,10 @@ function applyToggleComment(state) {
   const line = lines[info.lineIndex];
   const trimmed = line.trim();
 
-  if (trimmed.startsWith("#")) {
-    lines[info.lineIndex] = line.replace(/^(\s*)#\s?/, "$1");
+  if (trimmed.startsWith("//")) {
+    lines[info.lineIndex] = line.replace(/^(\s*)\/\/\s?/, "$1");
   } else if (trimmed) {
-    lines[info.lineIndex] = line.replace(/^(\s*)/, "$1# ");
+    lines[info.lineIndex] = line.replace(/^(\s*)/, "$1// ");
   } else {
     return {
       handled: true,

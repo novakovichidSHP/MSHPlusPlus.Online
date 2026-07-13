@@ -39,12 +39,38 @@ rt.dispose();     // освободить compiler + exec worker
 ```
 
 Дефолтные флаги: `-O2 -std=c++20 -fexceptions` (+ технические
-`-sSINGLE_FILE -sMODULARIZE -sEXPORT_NAME=createCppModule -sEXIT_RUNTIME`).
+`-sSINGLE_FILE -sMODULARIZE -sEXPORT_NAME=createCppModule -sEXIT_RUNTIME
+-sDYNAMIC_EXECUTION=0`).
 Язык — C++20; полнота библиотеки — по факту тулчейна (см. `docs/cpp-port/ТЗ_переработка.md`).
 
 Лимиты (зеркало `CONFIG` основного приложения): `maxOutputBytes` 2 МБ,
 `maxFiles` 30, `maxSingleFileBytes` 50 КБ, `maxTotalTextBytes` 250 КБ,
-`runTimeoutMs` 60 с, `compileTimeoutMs` 30 с.
+`runTimeoutMs` 60 с, `compileTimeoutMs` 45 с. Лимиты файлов применяются в
+`exec-worker` по `stat` до `readFile`, декодирования и `postMessage`; пропуски
+возвращаются как `outputFilesLimited` и `outputFilesLimitDetails`.
+
+## Граница безопасности пользовательского C++
+
+Вызовы JavaScript через Emscripten (`EM_ASM`, `EM_JS`,
+`emscripten_run_script*` и связанные bridge API) запрещены несколькими слоями:
+
+1. token-level проверка C/C++-исходников и заголовков (включая macro aliases и
+   прямой `##` token-pasting, но без ложных совпадений в строках/комментариях);
+2. `-sDYNAMIC_EXECUTION=0` при линковке;
+3. обязательная проверка готового `out.js` на generated bridge glue до запуска;
+4. immutable capability guard в `exec-worker`: сетевые/межконтекстные API
+   (`XMLHttpRequest`, sockets, nested workers, storage/channel globals) недоступны, а `fetch` разрешён только для
+   `data:` URL, необходимого для загрузки встроенного SINGLE_FILE wasm.
+
+Эти слои защищают same-origin worker в текущей архитектуре. Для более сильной
+изоляции от неизвестных возможностей JavaScript-движка потребуется отдельный
+opaque-origin sandbox; это отдельное архитектурное изменение, не замена текущим
+проверкам.
+
+Compile timeout является жёсткой отменой: compiler worker завершается, Comlink,
+диагностика, FS-кэш и служебные shim-флаги сбрасываются. Следующая компиляция
+создаёт чистый worker, поэтому просроченный clang не может дописать общий
+`out.js` или смешать диагностику с новой сборкой.
 
 ## ⚠️ Хостинг тулчейна — требование same-origin
 Compiler worker (`emception.worker.bundle.worker.js`) определяет путь к sysroot

@@ -30,9 +30,16 @@ test("enter falls back when indentation is not needed", () => {
 
 test("toggle comment comments and uncomments current line", () => {
   const first = apply(EDITOR_COMMANDS.TOGGLE_COMMENT, "x = 1", { start: 0, end: 0 });
-  assert.equal(first.value, "# x = 1");
+  assert.equal(first.value, "// x = 1");
   const second = apply(EDITOR_COMMANDS.TOGGLE_COMMENT, first.value, { start: 0, end: 0 });
   assert.equal(second.value, "x = 1");
+});
+
+test("toggle comment preserves indentation for C++ comments", () => {
+  const first = apply(EDITOR_COMMANDS.TOGGLE_COMMENT, "  return 0;", { start: 4, end: 4 });
+  assert.equal(first.value, "  // return 0;");
+  const second = apply(EDITOR_COMMANDS.TOGGLE_COMMENT, first.value, { start: 4, end: 4 });
+  assert.equal(second.value, "  return 0;");
 });
 
 test("move line up swaps lines and keeps cursor column", () => {

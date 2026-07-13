@@ -14,17 +14,26 @@ test("getBaseName returns empty on empty input", () => {
 });
 
 test("createNumberedImportName uses numeric suffix", () => {
-  const name = createNumberedImportName("main.py", () => false);
-  assert.equal(name, "main1.py");
+  const name = createNumberedImportName("main.cpp", () => false);
+  assert.equal(name, "main1.cpp");
 });
 
 test("createNumberedImportName skips taken numbers", () => {
-  const taken = new Set(["main1.py", "main2.py"]);
-  const name = createNumberedImportName("main.py", (candidate) => taken.has(candidate));
-  assert.equal(name, "main3.py");
+  const taken = new Set(["main1.cpp", "main2.cpp"]);
+  const name = createNumberedImportName("main.cpp", (candidate) => taken.has(candidate));
+  assert.equal(name, "main3.cpp");
 });
 
-test("createNumberedImportName handles names without .py", () => {
+test("createNumberedImportName uses the C++ default for names without extension", () => {
   const name = createNumberedImportName("utils", () => false);
-  assert.equal(name, "utils1.py");
+  assert.equal(name, "utils1.cpp");
+});
+
+test("createNumberedImportName preserves header and data extensions", () => {
+  assert.equal(createNumberedImportName("utils.hpp", () => false), "utils1.hpp");
+  assert.equal(createNumberedImportName("input.txt", () => false), "input1.txt");
+});
+
+test("createNumberedImportName inserts suffix before the final extension", () => {
+  assert.equal(createNumberedImportName("archive.tar.gz", () => false), "archive.tar1.gz");
 });

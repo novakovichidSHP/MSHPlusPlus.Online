@@ -25,6 +25,8 @@
  */
 
 import { applyDebugCommand, createDebugSession, evaluateDebugPoint } from "./debug-state.js";
+import { collectLimitedOutputFiles } from "./output-files-policy.js";
+import { lockDownNetworkCapabilities } from "./security-policy.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -65,17 +67,14 @@ self.onmessage = (event) => {
 // собираем то, что программа записала (файловый вывод).
 const WORKDIR = "/work";
 
-function sameBytes(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
 function postDebugPaused(frame) {
   self.postMessage({ type: "debug-paused", frame });
 }
 
-async function start({ moduleJs, stdin, files, maxOutputBytes, debug }) {
+async function start({
+  moduleJs, stdin, files, maxOutputBytes, maxFiles,
+  maxSingleFileBytes, maxTotalTextBytes, debug
+}) {
   if (typeof moduleJs !== "string") {
     self.postMessage({ type: "error", message: "exec-worker: нет moduleJs" });
     return;
@@ -97,25 +96,15 @@ async function start({ moduleJs, stdin, files, maxOutputBytes, debug }) {
 
   // Собрать файлы, созданные/изменённые программой в /work (файловый вывод).
   function collectOutputFiles() {
-    if (!runtimeFS) return [];
-    let entries;
-    try { entries = runtimeFS.readdir(WORKDIR); } catch (e) { return []; }
-    const out = [];
-    for (const name of entries) {
-      if (name === "." || name === "..") continue;
-      let data;
-      try {
-        const path = WORKDIR + "/" + name;
-        if (runtimeFS.isDir(runtimeFS.stat(path).mode)) continue; // без подкаталогов
-        data = runtimeFS.readFile(path); // Uint8Array
-      } catch (e) { continue; }
-      const prev = inputSnapshot.get(name);
-      if (prev && sameBytes(prev, data)) continue; // неизменённый вход — пропускаем
-      // СВОЙ декодер: общий `decoder` работает в потоковом режиме (__outWrite) и
-      // может держать «хвост» от stdout — нельзя смешивать с содержимым файла.
-      out.push({ name, content: new TextDecoder().decode(data) });
-    }
-    return out;
+    if (!runtimeFS) return { files: [], limited: false, omitted: [] };
+    return collectLimitedOutputFiles({
+      runtimeFS,
+      workdir: WORKDIR,
+      inputSnapshot,
+      maxFiles: Number.isFinite(maxFiles) ? maxFiles : 30,
+      maxSingleFileBytes: Number.isFinite(maxSingleFileBytes) ? maxSingleFileBytes : 50_000,
+      maxTotalTextBytes: Number.isFinite(maxTotalTextBytes) ? maxTotalTextBytes : 250_000
+    });
   }
 
   // ВАЖНО (доказано замером): при -sASYNCIFY+EXIT_RUNTIME, когда main
@@ -127,8 +116,15 @@ async function start({ moduleJs, stdin, files, maxOutputBytes, debug }) {
   function finish(code) {
     if (finished) return;
     finished = true;
-    const outFiles = collectOutputFiles();
-    if (outFiles.length) self.postMessage({ type: "output-files", files: outFiles });
+    const output = collectOutputFiles();
+    if (output.files.length) self.postMessage({ type: "output-files", files: output.files });
+    if (output.limited) {
+      self.postMessage({
+        type: "output-files-limited",
+        omitted: output.omitted,
+        message: `Не все созданные файлы сохранены: превышены лимиты (${output.omitted.length})`
+      });
+    }
     self.postMessage({ type: "done", exitCode: code | 0 });
   }
 
@@ -214,6 +210,10 @@ async function start({ moduleJs, stdin, files, maxOutputBytes, debug }) {
   };
 
   try {
+    // Generated code executes in this worker's realm. Remove same-origin network
+    // capabilities before eval as a final boundary even if a compiler bridge
+    // evades the source and post-link gates.
+    lockDownNetworkCapabilities(self);
     (0, eval)(moduleJs);
     const factory = self.createCppModule;
     if (typeof factory !== "function") {
